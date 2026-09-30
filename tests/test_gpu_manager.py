@@ -1,7 +1,9 @@
 """Tests for GPUManager with both real and mocked NVML."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from worker.gpu import GPUManager
 
 
@@ -20,7 +22,7 @@ def test_gpu_manager_with_mocked_nvml():
         mock_handle = MagicMock()
         mock_nvml.nvmlDeviceGetHandleByIndex.return_value = mock_handle
         mock_nvml.nvmlDeviceGetName.return_value = "NVIDIA RTX A6000"
-        
+
         mock_mem = MagicMock()
         mock_mem.total = 48 * 1024 * 1024 * 1024
         mock_mem.free = 40 * 1024 * 1024 * 1024

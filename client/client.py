@@ -1,6 +1,7 @@
 """GPU Fabric Client library for communicating with remote GPU workers."""
 
 from typing import List, Optional
+
 import httpx
 
 from common.models import (
@@ -22,16 +23,19 @@ from common.protocol import (
 
 class GPUFabricError(Exception):
     """Base exception for GPU Fabric client errors."""
+
     pass
 
 
 class GPUFabricConnectionError(GPUFabricError):
     """Raised when unable to connect to the GPU worker."""
+
     pass
 
 
 class GPUFabricWorkerError(GPUFabricError):
     """Raised when worker returns an error status or bad request."""
+
     pass
 
 
@@ -83,17 +87,13 @@ class GPUFabricClient:
             raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
 
         if resp.status_code != 200:
-            raise GPUFabricWorkerError(
-                f"Worker returned status {resp.status_code}: {resp.text}"
-            )
+            raise GPUFabricWorkerError(f"Worker returned status {resp.status_code}: {resp.text}")
         return HealthResponse.model_validate(resp.json())
 
     def get_gpu_info(self, device_index: int = 0) -> GPUInfoResponse:
         """Retrieve static GPU hardware specs and current memory state."""
         try:
-            resp = self._http_client.get(
-                GPU_INFO_ENDPOINT, params={"device_index": device_index}
-            )
+            resp = self._http_client.get(GPU_INFO_ENDPOINT, params={"device_index": device_index})
         except httpx.RequestError as e:
             raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
 
@@ -106,9 +106,7 @@ class GPUFabricClient:
     def get_status(self, device_index: int = 0) -> GPUStatusResponse:
         """Retrieve real-time GPU load, memory usage, and temperature."""
         try:
-            resp = self._http_client.get(
-                STATUS_ENDPOINT, params={"device_index": device_index}
-            )
+            resp = self._http_client.get(STATUS_ENDPOINT, params={"device_index": device_index})
         except httpx.RequestError as e:
             raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
 
@@ -142,7 +140,13 @@ class GPUFabricClient:
             raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
 
         if resp.status_code != 200:
-            detail = resp.json().get("detail", resp.text) if resp.headers.get("content-type") == "application/json" else resp.text
-            raise GPUFabricWorkerError(f"Worker execution failed (HTTP {resp.status_code}): {detail}")
+            detail = (
+                resp.json().get("detail", resp.text)
+                if resp.headers.get("content-type") == "application/json"
+                else resp.text
+            )
+            raise GPUFabricWorkerError(
+                f"Worker execution failed (HTTP {resp.status_code}): {detail}"
+            )
 
         return ExecuteResponse.model_validate(resp.json())

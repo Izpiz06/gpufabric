@@ -1,10 +1,10 @@
 """Tests for common models and protocol utilities."""
 
 from common.models import (
-    HealthResponse,
-    GPUInfoResponse,
     ExecuteRequest,
     ExecuteResponse,
+    GPUInfoResponse,
+    HealthResponse,
     WorkloadType,
 )
 from common.protocol import bytes_to_human

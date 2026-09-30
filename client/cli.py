@@ -44,7 +44,9 @@ def handle_gpu(client: GPUFabricClient, args):
 
     table.add_row("GPU Model", gpu_info.name)
     table.add_row("Device Index", str(gpu_info.device_index))
-    table.add_row("Total VRAM", f"{gpu_info.total_vram_human} ({gpu_info.total_vram_bytes:,} bytes)")
+    table.add_row(
+        "Total VRAM", f"{gpu_info.total_vram_human} ({gpu_info.total_vram_bytes:,} bytes)"
+    )
     table.add_row("Free VRAM", f"{gpu_info.free_vram_human} ({gpu_info.free_vram_bytes:,} bytes)")
     table.add_row("Used VRAM", f"{gpu_info.used_vram_human} ({gpu_info.used_vram_bytes:,} bytes)")
     table.add_row("Compute Capability", gpu_info.compute_capability or "N/A")
@@ -62,8 +64,16 @@ def handle_status(client: GPUFabricClient, args):
     table.add_column("Metric", style="cyan", no_wrap=True)
     table.add_column("Value", style="bold")
 
-    gpu_util = f"{status_info.gpu_utilization_pct}%" if status_info.gpu_utilization_pct is not None else "N/A"
-    mem_util = f"{status_info.memory_utilization_pct}%" if status_info.memory_utilization_pct is not None else "N/A"
+    gpu_util = (
+        f"{status_info.gpu_utilization_pct}%"
+        if status_info.gpu_utilization_pct is not None
+        else "N/A"
+    )
+    mem_util = (
+        f"{status_info.memory_utilization_pct}%"
+        if status_info.memory_utilization_pct is not None
+        else "N/A"
+    )
     temp = f"{status_info.temperature_c} °C" if status_info.temperature_c is not None else "N/A"
 
     table.add_row("GPU Core Utilization", gpu_util)
@@ -93,7 +103,9 @@ def handle_execute(client: GPUFabricClient, args):
         vector_b = [10.0, 20.0, 30.0, 40.0, 50.0]
 
     if len(vector_a) != len(vector_b):
-        console.print(f"[bold red]Error:[/bold red] len(A) ({len(vector_a)}) != len(B) ({len(vector_b)})")
+        console.print(
+            f"[bold red]Error:[/bold red] len(A) ({len(vector_a)}) != len(B) ({len(vector_b)})"
+        )
         sys.exit(1)
 
     console.print(f"[bold]Executing Workload:[/bold] C = A + B (vector size: {len(vector_a)})")
@@ -166,11 +178,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_status.add_argument("--device", type=int, default=0, help="Device index (default: 0)")
 
     # execute
-    p_exec = subparsers.add_parser("execute", help="Execute vector addition C = A + B on worker's GPU")
+    p_exec = subparsers.add_parser(
+        "execute", help="Execute vector addition C = A + B on worker's GPU"
+    )
     p_exec.add_argument("worker_ip", type=str, help="IP or hostname of the worker")
     p_exec.add_argument("--device", type=int, default=0, help="Device index (default: 0)")
-    p_exec.add_argument("--a", nargs="+", type=float, help="Values for Vector A (e.g. --a 1.0 2.0 3.0)")
-    p_exec.add_argument("--b", nargs="+", type=float, help="Values for Vector B (e.g. --b 4.0 5.0 6.0)")
+    p_exec.add_argument(
+        "--a", nargs="+", type=float, help="Values for Vector A (e.g. --a 1.0 2.0 3.0)"
+    )
+    p_exec.add_argument(
+        "--b", nargs="+", type=float, help="Values for Vector B (e.g. --b 4.0 5.0 6.0)"
+    )
     p_exec.add_argument("--size", type=int, help="Generate random test vectors of this size")
 
     return parser

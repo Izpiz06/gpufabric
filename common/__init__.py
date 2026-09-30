@@ -1,11 +1,11 @@
 """GPU Fabric common module."""
 
 from common.models import (
-    HealthResponse,
-    GPUInfoResponse,
-    GPUStatusResponse,
     ExecuteRequest,
     ExecuteResponse,
+    GPUInfoResponse,
+    GPUStatusResponse,
+    HealthResponse,
     WorkloadType,
 )
 from common.protocol import DEFAULT_PORT, bytes_to_human

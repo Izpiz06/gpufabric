@@ -9,6 +9,7 @@ logger = logging.getLogger("gpufabric.worker.executor")
 
 class GPUExecutionError(Exception):
     """Raised when GPU execution fails or GPU is unavailable."""
+
     pass
 
 
@@ -23,6 +24,7 @@ class GPUExecutor:
         # Check CuPy
         try:
             import cupy as cp
+
             # Verify CUDA runtime / device count
             if cp.cuda.runtime.getDeviceCount() > 0:
                 return "cupy"
@@ -32,6 +34,7 @@ class GPUExecutor:
         # Check PyCUDA
         try:
             import pycuda.driver as cuda
+
             cuda.init()
             if cuda.Device.count() > 0:
                 return "pycuda"
@@ -41,6 +44,7 @@ class GPUExecutor:
         # Check PyTorch with CUDA
         try:
             import torch
+
             if torch.cuda.is_available() and torch.cuda.device_count() > 0:
                 return "torch_cuda"
         except Exception:
@@ -59,10 +63,10 @@ class GPUExecutor:
     ) -> Tuple[List[float], float, str]:
         """
         Execute vector addition C = A + B on the worker's GPU.
-        
+
         Returns:
             Tuple of (result_list, execution_time_ms, backend_name)
-        
+
         Raises:
             ValueError: If vector lengths mismatch.
             GPUExecutionError: If no GPU is available or CUDA execution fails.
@@ -96,14 +100,14 @@ class GPUExecutor:
                 t0 = time.perf_counter()
                 gpu_a = cp.asarray(a, dtype=cp.float32)
                 gpu_b = cp.asarray(b, dtype=cp.float32)
-                
+
                 # Execute kernel on GPU
                 gpu_c = gpu_a + gpu_b
-                
+
                 # Synchronize stream to ensure GPU computation completes
                 cp.cuda.Stream.null.synchronize()
                 t1 = time.perf_counter()
-                
+
                 # Transfer back to host
                 result = gpu_c.tolist()
                 execution_time_ms = (t1 - t0) * 1000.0
@@ -129,7 +133,7 @@ class GPUExecutor:
                 t0 = time.perf_counter()
                 gpu_a = gpuarray.to_gpu(np_a)
                 gpu_b = gpuarray.to_gpu(np_b)
-                
+
                 gpu_c = gpu_a + gpu_b
                 ctx.synchronize()
                 t1 = time.perf_counter()
@@ -150,14 +154,14 @@ class GPUExecutor:
         try:
             device = torch.device(f"cuda:{device_index}")
             t0 = time.perf_counter()
-            
+
             # Transfer to GPU device
             tensor_a = torch.tensor(a, dtype=torch.float32, device=device)
             tensor_b = torch.tensor(b, dtype=torch.float32, device=device)
-            
+
             # Execute on GPU
             tensor_c = tensor_a + tensor_b
-            
+
             # Synchronize CUDA device
             torch.cuda.synchronize(device)
             t1 = time.perf_counter()

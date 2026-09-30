@@ -1,8 +1,10 @@
 """Tests for GPUExecutor."""
 
 from unittest.mock import MagicMock, patch
+
 import pytest
-from worker.executor import GPUExecutor, GPUExecutionError
+
+from worker.executor import GPUExecutionError, GPUExecutor
 
 
 def test_executor_dimension_mismatch():

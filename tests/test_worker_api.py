@@ -1,11 +1,12 @@
 """Tests for FastAPI worker API routes."""
 
 from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
-from worker.app import create_app
 from common.models import GPUInfoResponse, GPUStatusResponse
+from worker.app import create_app
 
 
 @pytest.fixture
@@ -38,8 +39,10 @@ def test_gpu_info_endpoint_mocked():
         compute_capability="8.6",
         driver_version="535.104.05",
     )
-    with patch.object(app.state.worker.gpu_manager, "is_available", return_value=True), \
-         patch.object(app.state.worker.gpu_manager, "get_gpu_info", return_value=mock_info):
+    with (
+        patch.object(app.state.worker.gpu_manager, "is_available", return_value=True),
+        patch.object(app.state.worker.gpu_manager, "get_gpu_info", return_value=mock_info),
+    ):
         test_client = TestClient(app)
         resp = test_client.get("/gpu?device_index=0")
         assert resp.status_code == 200
@@ -62,8 +65,10 @@ def test_gpu_status_endpoint_mocked():
         temperature_c=55,
         active_tasks=0,
     )
-    with patch.object(app.state.worker.gpu_manager, "is_available", return_value=True), \
-         patch.object(app.state.worker.gpu_manager, "get_gpu_status", return_value=mock_status):
+    with (
+        patch.object(app.state.worker.gpu_manager, "is_available", return_value=True),
+        patch.object(app.state.worker.gpu_manager, "get_gpu_status", return_value=mock_status),
+    ):
         test_client = TestClient(app)
         resp = test_client.get("/status?device_index=0")
         assert resp.status_code == 200

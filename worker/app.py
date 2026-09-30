@@ -24,8 +24,8 @@ from common.protocol import (
     HEALTH_ENDPOINT,
     STATUS_ENDPOINT,
 )
+from worker.executor import GPUExecutionError, GPUExecutor
 from worker.gpu import GPUManager
-from worker.executor import GPUExecutor, GPUExecutionError
 
 logger = logging.getLogger("gpufabric.worker")
 
@@ -80,7 +80,9 @@ def create_app(worker_id: Optional[str] = None) -> FastAPI:
     )
     async def get_health() -> HealthResponse:
         """Returns the health status and GPU availability of this worker."""
-        gpu_ready = worker_state.gpu_manager.is_available() or worker_state.gpu_executor.is_gpu_ready()
+        gpu_ready = (
+            worker_state.gpu_manager.is_available() or worker_state.gpu_executor.is_gpu_ready()
+        )
         return HealthResponse(
             status="ok",
             worker_id=worker_state.worker_id,
@@ -94,7 +96,7 @@ def create_app(worker_id: Optional[str] = None) -> FastAPI:
         summary="Get GPU hardware information",
     )
     async def get_gpu_info(
-        device_index: int = Query(0, description="CUDA device index (default: 0)")
+        device_index: int = Query(0, description="CUDA device index (default: 0)"),
     ) -> GPUInfoResponse:
         """Returns GPU specifications (VRAM, compute capability, driver version)."""
         if not worker_state.gpu_manager.is_available():
@@ -115,7 +117,7 @@ def create_app(worker_id: Optional[str] = None) -> FastAPI:
         summary="Get dynamic GPU and worker status",
     )
     async def get_status(
-        device_index: int = Query(0, description="CUDA device index (default: 0)")
+        device_index: int = Query(0, description="CUDA device index (default: 0)"),
     ) -> GPUStatusResponse:
         """Returns real-time GPU load, VRAM usage, temperature, and active task count."""
         if not worker_state.gpu_manager.is_available():

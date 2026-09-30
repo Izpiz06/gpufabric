@@ -1,12 +1,11 @@
 """GPU management and monitoring module using NVML."""
 
 import logging
+import warnings
 from typing import Optional
 
 from common.models import GPUInfoResponse, GPUStatusResponse
 from common.protocol import bytes_to_human
-
-import warnings
 
 logger = logging.getLogger("gpufabric.worker.gpu")
 

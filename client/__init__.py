@@ -2,8 +2,8 @@
 
 from client.client import (
     GPUFabricClient,
-    GPUFabricError,
     GPUFabricConnectionError,
+    GPUFabricError,
     GPUFabricWorkerError,
 )
 

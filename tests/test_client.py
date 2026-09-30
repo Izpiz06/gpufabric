@@ -1,12 +1,13 @@
 """Tests for GPUFabricClient library."""
 
 from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 
-from worker.app import create_app
-from common.models import GPUInfoResponse
 from client.client import GPUFabricClient
+from common.models import GPUInfoResponse
+from worker.app import create_app
 
 
 @pytest.fixture
@@ -38,8 +39,10 @@ def test_client_gpu_info(mock_app):
         compute_capability="8.0",
         driver_version="535.104.05",
     )
-    with patch.object(mock_app.state.worker.gpu_manager, "is_available", return_value=True), \
-         patch.object(mock_app.state.worker.gpu_manager, "get_gpu_info", return_value=mock_info):
+    with (
+        patch.object(mock_app.state.worker.gpu_manager, "is_available", return_value=True),
+        patch.object(mock_app.state.worker.gpu_manager, "get_gpu_info", return_value=mock_info),
+    ):
         test_client = TestClient(mock_app)
         client = GPUFabricClient(base_url="http://testworker:8000")
         client._http_client = test_client

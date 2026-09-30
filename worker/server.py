@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+
 import uvicorn
 
 from common.protocol import DEFAULT_PORT
