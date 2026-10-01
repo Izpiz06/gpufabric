@@ -1,15 +1,5 @@
 """GPU Fabric Client module."""
 
-from client.client import (
-    GPUFabricClient,
-    GPUFabricConnectionError,
-    GPUFabricError,
-    GPUFabricWorkerError,
-)
+from client.client import GPUFabricClient, GPUFabricError
 
-__all__ = [
-    "GPUFabricClient",
-    "GPUFabricError",
-    "GPUFabricConnectionError",
-    "GPUFabricWorkerError",
-]
+__all__ = ["GPUFabricClient", "GPUFabricError"]

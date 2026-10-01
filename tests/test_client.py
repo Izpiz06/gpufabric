@@ -1,68 +1,73 @@
-"""Tests for GPUFabricClient library."""
+"""Tests for GPUFabricClient."""
 
+from concurrent import futures
 from unittest.mock import patch
 
+import grpc
 import pytest
-from fastapi.testclient import TestClient
 
 from client.client import GPUFabricClient
-from common.models import GPUInfoResponse
-from worker.app import create_app
+from common.gpufabric_pb2_grpc import add_GPUFabricServiceServicer_to_server
+from worker.executor import GPUExecutor
+from worker.gpu import GPUManager
+from worker.service import GPUFabricServicer
+from worker.state import WorkerState
 
 
-@pytest.fixture
-def mock_app():
-    app = create_app(worker_id="test-worker-02")
-    return app
+@pytest.fixture(scope="module")
+def grpc_server():
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
+    state = WorkerState("test-worker-e2e")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    servicer = GPUFabricServicer(state, gpu, executor)
+    add_GPUFabricServiceServicer_to_server(servicer, server)
+
+    port = server.add_insecure_port("127.0.0.1:0")
+    server.start()
+    yield port, servicer, gpu, executor
+    server.stop(None)
 
 
-def test_client_discover_and_health(mock_app):
-    test_client = TestClient(mock_app)
-    client = GPUFabricClient(base_url="http://testworker:8000")
-    client._http_client = test_client
+def test_client_health_and_discover(grpc_server):
+    port, _, _, _ = grpc_server
+    with GPUFabricClient(host="127.0.0.1", port=port) as client:
+        health = client.health()
+        assert health.status == "ok"
+        assert health.worker_id == "test-worker-e2e"
 
-    health = client.discover()
-    assert health.status == "ok"
-    assert health.worker_id == "test-worker-02"
+        disc = client.discover()
+        assert disc.worker_id == "test-worker-e2e"
 
 
-def test_client_gpu_info(mock_app):
-    mock_info = GPUInfoResponse(
-        device_index=0,
-        name="NVIDIA A100-SXM4-80GB",
-        total_vram_bytes=80 * 1024 * 1024 * 1024,
-        free_vram_bytes=70 * 1024 * 1024 * 1024,
-        used_vram_bytes=10 * 1024 * 1024 * 1024,
-        total_vram_human="80.00 GiB",
-        free_vram_human="70.00 GiB",
-        used_vram_human="10.00 GiB",
-        compute_capability="8.0",
-        driver_version="535.104.05",
-    )
+def test_client_gpu_info(grpc_server):
+    port, _, gpu, _ = grpc_server
+    mock_info = {
+        "device_index": 0,
+        "name": "NVIDIA A100",
+        "total_vram": 80000000000,
+        "free_vram": 70000000000,
+        "used_vram": 10000000000,
+        "compute_capability": "8.0",
+        "driver_version": "535.0",
+    }
     with (
-        patch.object(mock_app.state.worker.gpu_manager, "is_available", return_value=True),
-        patch.object(mock_app.state.worker.gpu_manager, "get_gpu_info", return_value=mock_info),
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "get_info", return_value=mock_info),
     ):
-        test_client = TestClient(mock_app)
-        client = GPUFabricClient(base_url="http://testworker:8000")
-        client._http_client = test_client
-
-        info = client.get_gpu_info(device_index=0)
-        assert info.name == "NVIDIA A100-SXM4-80GB"
-        assert info.compute_capability == "8.0"
+        with GPUFabricClient(host="127.0.0.1", port=port) as client:
+            info = client.get_gpu_info(device_index=0)
+            assert info.name == "NVIDIA A100"
+            assert info.compute_capability == "8.0"
 
 
-def test_client_execute_vector_add(mock_app):
+def test_client_execute_vector_add(grpc_server):
+    port, _, _, executor = grpc_server
     with patch.object(
-        mock_app.state.worker.gpu_executor,
-        "execute_vector_add",
-        return_value=([10.0, 20.0, 30.0], 0.15, "torch_cuda"),
+        executor, "execute_vector_add", return_value=([10.0, 20.0], 0.18, "torch_cuda")
     ):
-        test_client = TestClient(mock_app)
-        client = GPUFabricClient(base_url="http://testworker:8000")
-        client._http_client = test_client
-
-        resp = client.execute_vector_add(a=[1.0, 2.0, 3.0], b=[9.0, 18.0, 27.0])
-        assert resp.status == "success"
-        assert resp.result == [10.0, 20.0, 30.0]
-        assert resp.gpu_backend == "torch_cuda"
+        with GPUFabricClient(host="127.0.0.1", port=port) as client:
+            resp = client.execute_vector_add(a=[1.0, 2.0], b=[9.0, 18.0])
+            assert resp.status == "success"
+            assert list(resp.result) == [10.0, 20.0]
+            assert resp.gpu_backend == "torch_cuda"

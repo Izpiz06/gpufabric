@@ -1,24 +1,22 @@
-"""GPU Fabric Client library for communicating with remote GPU workers."""
+"""gRPC client SDK for GPU Fabric."""
 
-from typing import List, Optional
+from typing import List
 
-import httpx
+import grpc
 
-from common.models import (
+from common.constants import DEFAULT_PORT
+from common.gpufabric_pb2 import (
     ExecuteRequest,
     ExecuteResponse,
+    GPUInfoRequest,
     GPUInfoResponse,
+    GPUStatusRequest,
     GPUStatusResponse,
+    HealthRequest,
     HealthResponse,
     WorkloadType,
 )
-from common.protocol import (
-    DEFAULT_PORT,
-    EXECUTE_ENDPOINT,
-    GPU_INFO_ENDPOINT,
-    HEALTH_ENDPOINT,
-    STATUS_ENDPOINT,
-)
+from common.gpufabric_pb2_grpc import GPUFabricServiceStub
 
 
 class GPUFabricError(Exception):
@@ -27,47 +25,22 @@ class GPUFabricError(Exception):
     pass
 
 
-class GPUFabricConnectionError(GPUFabricError):
-    """Raised when unable to connect to the GPU worker."""
-
-    pass
-
-
-class GPUFabricWorkerError(GPUFabricError):
-    """Raised when worker returns an error status or bad request."""
-
-    pass
-
-
 class GPUFabricClient:
-    """Client for querying GPU workers and executing workloads remotely."""
+    """Client for querying GPU workers and executing workloads via gRPC."""
 
-    def __init__(
-        self,
-        host: str = "localhost",
-        port: int = DEFAULT_PORT,
-        base_url: Optional[str] = None,
-        timeout: float = 15.0,
-    ):
-        if base_url:
-            self.base_url = base_url.rstrip("/")
+    def __init__(self, host: str = "localhost", port: int = DEFAULT_PORT, timeout: float = 15.0):
+        # Format address
+        if ":" in host:
+            self.target = host
         else:
-            # Handle if host was passed with http:// or port included
-            host_clean = host.strip()
-            if host_clean.startswith("http://") or host_clean.startswith("https://"):
-                self.base_url = host_clean.rstrip("/")
-            else:
-                if ":" in host_clean:
-                    self.base_url = f"http://{host_clean}"
-                else:
-                    self.base_url = f"http://{host_clean}:{port}"
+            self.target = f"{host}:{port}"
 
         self.timeout = timeout
-        self._http_client = httpx.Client(base_url=self.base_url, timeout=self.timeout)
+        self._channel = grpc.insecure_channel(self.target)
+        self._stub = GPUFabricServiceStub(self._channel)
 
     def close(self):
-        """Close underlying HTTP client."""
-        self._http_client.close()
+        self._channel.close()
 
     def __enter__(self):
         return self
@@ -75,78 +48,39 @@ class GPUFabricClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def health(self) -> HealthResponse:
+        try:
+            return self._stub.GetHealth(HealthRequest(), timeout=self.timeout)
+        except grpc.RpcError as e:
+            raise GPUFabricError(f"Health check failed on {self.target}: {e.details() or e.code()}")
+
     def discover(self) -> HealthResponse:
-        """Alias for health check to verify connectivity to worker."""
         return self.health()
 
-    def health(self) -> HealthResponse:
-        """Query worker health and basic information."""
-        try:
-            resp = self._http_client.get(HEALTH_ENDPOINT)
-        except httpx.RequestError as e:
-            raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
-
-        if resp.status_code != 200:
-            raise GPUFabricWorkerError(f"Worker returned status {resp.status_code}: {resp.text}")
-        return HealthResponse.model_validate(resp.json())
-
     def get_gpu_info(self, device_index: int = 0) -> GPUInfoResponse:
-        """Retrieve static GPU hardware specs and current memory state."""
         try:
-            resp = self._http_client.get(GPU_INFO_ENDPOINT, params={"device_index": device_index})
-        except httpx.RequestError as e:
-            raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
-
-        if resp.status_code != 200:
-            raise GPUFabricWorkerError(
-                f"Worker returned status {resp.status_code}: {resp.json().get('detail', resp.text)}"
-            )
-        return GPUInfoResponse.model_validate(resp.json())
+            req = GPUInfoRequest(device_index=device_index)
+            return self._stub.GetGPUInfo(req, timeout=self.timeout)
+        except grpc.RpcError as e:
+            raise GPUFabricError(f"Failed to fetch GPU info: {e.details() or e.code()}")
 
     def get_status(self, device_index: int = 0) -> GPUStatusResponse:
-        """Retrieve real-time GPU load, memory usage, and temperature."""
         try:
-            resp = self._http_client.get(STATUS_ENDPOINT, params={"device_index": device_index})
-        except httpx.RequestError as e:
-            raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
-
-        if resp.status_code != 200:
-            raise GPUFabricWorkerError(
-                f"Worker returned status {resp.status_code}: {resp.json().get('detail', resp.text)}"
-            )
-        return GPUStatusResponse.model_validate(resp.json())
+            req = GPUStatusRequest(device_index=device_index)
+            return self._stub.GetGPUStatus(req, timeout=self.timeout)
+        except grpc.RpcError as e:
+            raise GPUFabricError(f"Failed to fetch GPU status: {e.details() or e.code()}")
 
     def execute_vector_add(
-        self,
-        a: List[float],
-        b: List[float],
-        device_index: int = 0,
+        self, a: List[float], b: List[float], device_index: int = 0
     ) -> ExecuteResponse:
-        """
-        Submit a vector addition workload (C = A + B) to execute on the worker's GPU.
-        """
-        payload = ExecuteRequest(
-            workload_type=WorkloadType.VECTOR_ADD,
-            a=a,
-            b=b,
-            device_index=device_index,
-        )
         try:
-            resp = self._http_client.post(
-                EXECUTE_ENDPOINT,
-                json=payload.model_dump(),
+            req = ExecuteRequest(
+                workload_type=WorkloadType.VECTOR_ADD,
+                a=a,
+                b=b,
+                device_index=device_index,
             )
-        except httpx.RequestError as e:
-            raise GPUFabricConnectionError(f"Failed to connect to worker at {self.base_url}: {e}")
-
-        if resp.status_code != 200:
-            detail = (
-                resp.json().get("detail", resp.text)
-                if resp.headers.get("content-type") == "application/json"
-                else resp.text
-            )
-            raise GPUFabricWorkerError(
-                f"Worker execution failed (HTTP {resp.status_code}): {detail}"
-            )
-
-        return ExecuteResponse.model_validate(resp.json())
+            return self._stub.Execute(req, timeout=self.timeout)
+        except grpc.RpcError as e:
+            raise GPUFabricError(f"Execution failed on GPU: {e.details() or e.code()}")

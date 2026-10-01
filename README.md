@@ -2,9 +2,9 @@
 
 # ⚡ GPU Fabric
 
-**Discover, access, and control GPUs across machines on your local network.**
+**Discover, access, and control GPUs across machines on your local network via gRPC.**
 
-Turn networked machines with NVIDIA GPUs into a unified, accessible GPU compute fabric.
+Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU compute fabric.
 
 ---
 
@@ -12,7 +12,7 @@ Turn networked machines with NVIDIA GPUs into a unified, accessible GPU compute 
 [![Build & Prebuilds](https://github.com/Izpiz06/gpufabric/actions/workflows/build.yml/badge.svg)](https://github.com/Izpiz06/gpufabric/actions/workflows/build.yml)
 [![Python Versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/gpufabric/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![FastAPI](https://img.shields.io/badge/Framework-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![gRPC](https://img.shields.io/badge/RPC-gRPC%20%2B%20Protobuf-3B82F6?logo=google&logoColor=white)](https://grpc.io)
 [![CUDA](https://img.shields.io/badge/NVIDIA-CUDA_Ready-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
 
 </div>
@@ -30,7 +30,7 @@ Turn networked machines with NVIDIA GPUs into a unified, accessible GPU compute 
   - [2. Use Client CLI (Client Node)](#2-use-client-cli-client-node)
 - [CLI Showcase](#-cli-showcase)
 - [Python SDK](#-python-sdk)
-- [Worker API Reference](#-worker-api-reference)
+- [gRPC Service Definition](#-grpc-service-definition)
 - [Project Layout](#-project-layout)
 - [Testing & Quality](#-testing--quality)
 - [Roadmap](#-roadmap)
@@ -40,19 +40,20 @@ Turn networked machines with NVIDIA GPUs into a unified, accessible GPU compute 
 
 ## 🚀 Overview
 
-**GPU Fabric** is a lightweight, high-performance distributed GPU runtime designed for local networks. Instead of managing complex orchestration clusters or cloud virtual machines, GPU Fabric allows you to run workloads directly on remote GPUs across your LAN with minimal overhead.
+**GPU Fabric** is a lightweight, high-performance distributed GPU runtime designed for local networks. Instead of heavy orchestration stacks or cloud dependencies, GPU Fabric uses **gRPC with Protocol Buffers** to provide ultra-low latency remote GPU access and workload dispatch across your LAN.
 
-> 🎯 **Phase 1 Prototype**: Focused on direct client-to-worker discovery, hardware telemetry, and remote GPU kernel execution ($C = A + B$) with zero CPU faking.
+> 🎯 **Phase 1 Prototype**: Focused on direct client-to-worker gRPC discovery, hardware telemetry, and remote GPU kernel execution ($C = A + B$) with zero CPU faking.
 
 ---
 
 ## ✨ Key Features
 
-* 🔍 **Zero-Friction Discovery**: Query any worker node over LAN to inspect hardware specs and cluster readiness.
+* 🚀 **gRPC & Protocol Buffers**: High-speed, strongly typed binary RPC protocol.
+* 🔍 **Zero-Friction Discovery**: Connect to any worker over LAN to inspect hardware specs and cluster readiness.
 * 📊 **Live NVML Telemetry**: Real-time VRAM allocation, GPU core utilization, memory controller load, and temperatures via NVIDIA NVML.
 * ⚡ **Physical GPU Kernel Execution**: Workloads execute directly on physical GPU memory via **CuPy**, **PyCUDA**, or **PyTorch CUDA** (no CPU fallback).
 * 🖥️ **Rich Interactive CLI**: Built-in formatted terminal user interface with status indicators, tables, and execution metrics.
-* 🐍 **Modern Python SDK & REST API**: Type-safe Pydantic v2 schemas and native async HTTP client.
+* 🧩 **Modular & Clean Architecture**: Codebase is split into single-responsibility, maintainable sub-modules.
 
 ---
 
@@ -63,21 +64,25 @@ flowchart LR
     subgraph ClientMachine["💻 Machine A (Client / Laptop)"]
         CLI["GPU Fabric CLI\n(python -m client)"]
         SDK["Python SDK\n(GPUFabricClient)"]
+        Stub["gRPC Client Stub\n(GPUFabricServiceStub)"]
+
+        CLI --> SDK
+        SDK --> Stub
     end
 
     subgraph WorkerMachine["🖥️ Machine B (GPU Worker Node)"]
-        FastAPI["FastAPI Worker Server\n(:8000)"]
+        Server["gRPC Server (:50051)\n(GPUFabricServiceServicer)"]
         NVML["GPU Manager\n(pynvml / NVML)"]
         Executor["GPU Executor\n(CuPy / PyCUDA / CUDA)"]
         GPU[("⚡ NVIDIA GPU\nRTX 3080/4090/A100")]
 
-        FastAPI --> NVML
-        FastAPI --> Executor
+        Server --> NVML
+        Server --> Executor
         Executor -->|CUDA Kernels| GPU
         NVML -.->|Telemetry| GPU
     end
 
-    ClientMachine -->|"HTTP / JSON over LAN"| WorkerMachine
+    Stub -->|"HTTP/2 & Protobuf over LAN"| Server
 ```
 
 ---
@@ -86,7 +91,7 @@ flowchart LR
 
 ### Prerequisites
 * Python **3.9+**
-* Linux / Windows / macOS (Client can run on any OS; Worker requires an NVIDIA GPU with drivers installed)
+* Linux / Windows / macOS (Client runs on any OS; Worker requires an NVIDIA GPU with drivers installed)
 
 ### 1. Clone & Install Core Package
 ```bash
@@ -98,7 +103,7 @@ pip install -e .
 ```
 
 ### 2. Install GPU Backend (On Worker Machine)
-Install your preferred CUDA backend matching your installed NVIDIA driver:
+Install your preferred CUDA backend matching your NVIDIA driver:
 
 ```bash
 # Recommended: CuPy for CUDA 12.x
@@ -120,12 +125,12 @@ pip install pycuda
 Run the worker on the machine containing the NVIDIA GPU:
 
 ```bash
-python -m worker --host 0.0.0.0 --port 8000
+python -m worker --host 0.0.0.0 --port 50051
 ```
 
 *Flags:*
 * `--host`: Interface IP to bind (default: `0.0.0.0`)
-* `--port`: Port number (default: `8000`)
+* `--port`: Port number (default: `50051`)
 * `--worker-id`: Custom name/tag for the worker node
 * `--log-level`: `debug`, `info`, `warning`, `error`
 
@@ -194,7 +199,7 @@ python -m client execute 192.168.1.50 --size 1000000
 
 ### `python -m client execute <worker-ip> --a 1 2 3 --b 4 5 6`
 ```text
-Executing Workload: C = A + B (vector size: 3)
+Executing Workload: C = A + B (size: 3)
   Vector A: [1.0, 2.0, 3.0]
   Vector B: [4.0, 5.0, 6.0]
 
@@ -204,7 +209,6 @@ Executing Workload: C = A + B (vector size: 3)
 │ Task ID        │ 8f94d8b2-5712-4cf0-8bb2-31c3bf1ef218             │
 │ Workload       │ vector_add                                       │
 │ Status         │ success                                          │
-│ Device Index   │ 0                                                │
 │ GPU Backend    │ cupy                                             │
 │ Execution Time │ 0.2840 ms                                        │
 └──────────────────────────────────────────────────────────────────┘
@@ -220,8 +224,8 @@ Use `GPUFabricClient` directly within your Python applications:
 ```python
 from client import GPUFabricClient
 
-# Connect to the remote worker
-with GPUFabricClient(host="192.168.1.50", port=8000) as client:
+# Connect to the remote worker via gRPC
+with GPUFabricClient(host="192.168.1.50", port=50051) as client:
     # 1. Health check
     health = client.health()
     print(f"Worker: {health.worker_id} (GPU Available: {health.gpu_available})")
@@ -230,9 +234,9 @@ with GPUFabricClient(host="192.168.1.50", port=8000) as client:
     gpu = client.get_gpu_info(device_index=0)
     print(f"Found GPU: {gpu.name} with {gpu.total_vram_human} VRAM")
 
-    # 3. Stream status
+    # 3. Live status
     status = client.get_status(device_index=0)
-    print(f"Current GPU Load: {status.gpu_utilization_pct}%, Temp: {status.temperature_c}°C")
+    print(f"GPU Load: {status.gpu_utilization_pct}%, Temp: {status.temperature_c}°C")
 
     # 4. Offload computation to remote GPU
     response = client.execute_vector_add(
@@ -240,22 +244,28 @@ with GPUFabricClient(host="192.168.1.50", port=8000) as client:
         b=[0.5, 1.5, 2.5, 3.5],
         device_index=0,
     )
-    print(f"Output: {response.result}")
+    print(f"Output: {list(response.result)}")
     print(f"Kernel Time: {response.execution_time_ms} ms via {response.gpu_backend}")
 ```
 
 ---
 
-## 🔌 Worker API Reference
+## 📜 gRPC Service Definition
 
-The worker exposes a REST API via FastAPI:
+Defined in [`proto/gpufabric.proto`](proto/gpufabric.proto):
 
-| Method | Endpoint | Description | Query / Body Parameters |
-|:---|:---|:---|:---|
-| `GET` | `/health` | Node health & GPU readiness | None |
-| `GET` | `/gpu` | Static GPU specs & memory capacity | `?device_index=0` |
-| `GET` | `/status` | Dynamic GPU load, temp & active tasks | `?device_index=0` |
-| `POST` | `/execute` | Execute compute kernel on GPU | `{"workload_type": "vector_add", "a": [...], "b": [...], "device_index": 0}` |
+```protobuf
+syntax = "proto3";
+
+package gpufabric;
+
+service GPUFabricService {
+  rpc GetHealth(HealthRequest) returns (HealthResponse);
+  rpc GetGPUInfo(GPUInfoRequest) returns (GPUInfoResponse);
+  rpc GetGPUStatus(GPUStatusRequest) returns (GPUStatusResponse);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+}
+```
 
 ---
 
@@ -263,33 +273,37 @@ The worker exposes a REST API via FastAPI:
 
 ```text
 gpufabric/
-├── .github/workflows/
-│   ├── ci.yml            # Multi-Python test matrix (3.9 - 3.13) & Ruff linting
-│   └── build.yml         # Wheel packaging & prebuild distribution artifacts
+├── proto/
+│   └── gpufabric.proto       # Service & message definitions
 ├── client/
-│   ├── __init__.py       # Exports GPUFabricClient
-│   ├── client.py         # Python client library
-│   ├── cli.py            # Rich CLI interface
-│   └── __main__.py       # python -m client entrypoint
+│   ├── __init__.py           # Exports GPUFabricClient
+│   ├── client.py             # Core gRPC Python client SDK
+│   ├── commands.py           # CLI sub-command handlers
+│   ├── formatters.py         # Rich terminal output formatters
+│   ├── cli.py                # Argument parsing & dispatch
+│   └── __main__.py           # python -m client entrypoint
 ├── worker/
-│   ├── __init__.py       # Exports create_app, GPUManager, GPUExecutor
-│   ├── app.py            # FastAPI worker application & endpoints
-│   ├── gpu.py            # NVML hardware inspection & monitoring
-│   ├── executor.py       # Real GPU kernel execution (CuPy / PyCUDA / Torch)
-│   ├── server.py         # Worker CLI runner
-│   └── __main__.py       # python -m worker entrypoint
+│   ├── __init__.py           # Exports worker components
+│   ├── state.py              # Worker metadata & active task state
+│   ├── gpu.py                # NVML device discovery & telemetry
+│   ├── executor.py           # Physical GPU kernel execution
+│   ├── service.py            # gRPC Servicer implementation
+│   ├── server.py             # gRPC Server initialization & CLI
+│   └── __main__.py           # python -m worker entrypoint
 ├── common/
 │   ├── __init__.py
-│   ├── models.py         # Pydantic v2 data models for API contracts
-│   └── protocol.py       # Constants, endpoints, formatting helpers
+│   ├── gpufabric_pb2.py      # Generated protobuf classes
+│   ├── gpufabric_pb2_grpc.py # Generated gRPC stubs & servicer
+│   ├── constants.py          # Port & version constants
+│   └── formatting.py         # Human-readable formatters
 ├── tests/
-│   ├── test_client.py    # Client API & discovery unit tests
-│   ├── test_common.py    # Protocol serialization tests
-│   ├── test_executor.py  # GPU executor validation tests
-│   ├── test_gpu_manager.py # NVML monitoring tests
-│   └── test_worker_api.py# FastAPI routes & integration tests
-├── pyproject.toml        # PEP 517/621 build configuration
-├── requirements.txt      # Core dependencies
+│   ├── test_client.py        # Client gRPC tests
+│   ├── test_common.py        # Protocol & formatting tests
+│   ├── test_executor.py      # GPU execution validation
+│   ├── test_gpu_manager.py   # NVML monitoring tests
+│   └── test_grpc_service.py  # gRPC Servicer unit tests
+├── pyproject.toml
+├── requirements.txt
 └── README.md
 ```
 
@@ -302,7 +316,7 @@ Run the automated test suite:
 pytest -v
 ```
 
-Run code quality and style checks:
+Run code formatting and linting:
 ```bash
 ruff check .
 ```
@@ -311,7 +325,7 @@ ruff check .
 
 ## 🗺️ Roadmap
 
-- [x] **Phase 1**: Single-node Client-Worker prototype, NVML telemetry, vector addition on GPU.
+- [x] **Phase 1**: Single-node Client-Worker prototype, gRPC + Protobuf protocol, NVML telemetry, GPU vector addition.
 - [ ] **Phase 2**: Automatic LAN multicast/mDNS node discovery and multi-GPU node aggregation.
 - [ ] **Phase 3**: Tensor operations & custom CUDA kernel dispatch over network streams.
 - [ ] **Phase 4**: Dynamic workload scheduling, memory pooling, and fault tolerance.

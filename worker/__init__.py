@@ -1,7 +1,16 @@
-"""GPU Fabric worker package."""
+"""GPU Fabric Worker module."""
 
-from worker.app import app, create_app
 from worker.executor import GPUExecutor
 from worker.gpu import GPUManager
+from worker.server import create_grpc_server, run_worker
+from worker.service import GPUFabricServicer
+from worker.state import WorkerState
 
-__all__ = ["create_app", "app", "GPUManager", "GPUExecutor"]
+__all__ = [
+    "GPUExecutor",
+    "GPUManager",
+    "WorkerState",
+    "GPUFabricServicer",
+    "create_grpc_server",
+    "run_worker",
+]

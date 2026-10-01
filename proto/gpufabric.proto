@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package gpufabric;
+
+// GPU Fabric gRPC Service definition
+service GPUFabricService {
+  rpc GetHealth(HealthRequest) returns (HealthResponse);
+  rpc GetGPUInfo(GPUInfoRequest) returns (GPUInfoResponse);
+  rpc GetGPUStatus(GPUStatusRequest) returns (GPUStatusResponse);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  string worker_id = 2;
+  string version = 3;
+  bool gpu_available = 4;
+}
+
+message GPUInfoRequest {
+  int32 device_index = 1;
+}
+
+message GPUInfoResponse {
+  int32 device_index = 1;
+  string name = 2;
+  int64 total_vram_bytes = 3;
+  int64 free_vram_bytes = 4;
+  int64 used_vram_bytes = 5;
+  string total_vram_human = 6;
+  string free_vram_human = 7;
+  string used_vram_human = 8;
+  string compute_capability = 9;
+  string driver_version = 10;
+}
+
+message GPUStatusRequest {
+  int32 device_index = 1;
+}
+
+message GPUStatusResponse {
+  int32 device_index = 1;
+  int32 gpu_utilization_pct = 2;
+  int32 memory_utilization_pct = 3;
+  int64 total_vram_bytes = 4;
+  int64 free_vram_bytes = 5;
+  int64 used_vram_bytes = 6;
+  string free_vram_human = 7;
+  string used_vram_human = 8;
+  int32 temperature_c = 9;
+  int32 active_tasks = 10;
+}
+
+enum WorkloadType {
+  WORKLOAD_UNSPECIFIED = 0;
+  VECTOR_ADD = 1;
+}
+
+message ExecuteRequest {
+  WorkloadType workload_type = 1;
+  repeated float a = 2;
+  repeated float b = 3;
+  int32 device_index = 4;
+}
+
+message ExecuteResponse {
+  string task_id = 1;
+  string workload_type = 2;
+  string status = 3;
+  repeated float result = 4;
+  int32 result_length = 5;
+  double execution_time_ms = 6;
+  int32 device_index = 7;
+  string gpu_backend = 8;
+  string error = 9;
+}
