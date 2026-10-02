@@ -4,9 +4,10 @@ from concurrent import futures
 from unittest.mock import patch
 
 import grpc
+import numpy as np
 import pytest
 
-from client.client import GPUFabricClient
+from client.client import GPUFabricClient, GPUFabricError
 from common.constants import DEFAULT_MAX_MESSAGE_MB
 from common.gpufabric_pb2_grpc import add_GPUFabricServiceServicer_to_server
 from common.grpc_options import message_size_options
@@ -85,3 +86,31 @@ def test_client_execute_payload_above_grpc_default_limit(grpc_server):
             resp = client.execute_vector_add(a=[1.0] * n, b=[1.0] * n)
             assert resp.result_length == n
             assert len(resp.result) == n
+
+
+def test_client_compute_roundtrip(grpc_server):
+    port, _, _, executor = grpc_server
+    a = np.arange(6, dtype=np.float32).reshape(2, 3)
+    b = np.ones((3, 2), dtype=np.float32)
+    with patch.object(executor, "compute", return_value=(a @ b, 0.01, 0.2)) as compute:
+        with GPUFabricClient(host="127.0.0.1", port=port) as client:
+            res = client.matmul(a, b)
+    op, inputs, device = compute.call_args.args
+    assert op == "matmul" and device == 0
+    np.testing.assert_array_equal(inputs[0], a)
+    np.testing.assert_array_equal(res.result, a @ b)
+    assert res.gpu_time_ms == 0.01
+    assert res.round_trip_ms > 0
+
+
+def test_client_compute_error_is_wrapped(grpc_server):
+    port, _, _, _ = grpc_server
+    with GPUFabricClient(host="127.0.0.1", port=port) as client:
+        with pytest.raises(GPUFabricError, match="inner dimensions"):
+            client.matmul(np.ones((2, 3), np.float32), np.ones((2, 3), np.float32))
+
+
+def test_client_compute_unknown_operation():
+    with GPUFabricClient(host="127.0.0.1", port=1) as client:
+        with pytest.raises(ValueError, match="Unknown operation"):
+            client.compute("transpose", np.ones(2))

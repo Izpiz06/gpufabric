@@ -1,5 +1,5 @@
 """GPU Fabric Client module."""
 
-from client.client import GPUFabricClient, GPUFabricError
+from client.client import ComputeResult, GPUFabricClient, GPUFabricError
 
-__all__ = ["GPUFabricClient", "GPUFabricError"]
+__all__ = ["ComputeResult", "GPUFabricClient", "GPUFabricError"]

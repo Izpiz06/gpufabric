@@ -3,8 +3,18 @@
 import random
 import sys
 
+import numpy as np
+
 from client.client import GPUFabricClient
-from client.formatters import console, print_execution, print_gpu_info, print_health, print_status
+from client.formatters import (
+    console,
+    print_compute,
+    print_execution,
+    print_gpu_info,
+    print_health,
+    print_status,
+)
+from client.verify import REFERENCE, relative_error, tolerance
 
 
 def cmd_discover(client: GPUFabricClient, args):
@@ -47,3 +57,27 @@ def cmd_execute(client: GPUFabricClient, args):
     with console.status("[bold green]Submitting kernel to worker GPU..."):
         resp = client.execute_vector_add(va, vb, device_index=args.device)
     print_execution(resp)
+
+
+def compute_input_shapes(op: str, size: int):
+    """Operand shapes used by the `compute` command for a given size."""
+    if op in ("vector_add", "vector_mul", "vector_dot"):
+        return [(size,), (size,)]
+    return [(size, size), (size, size)]
+
+
+def cmd_compute(client: GPUFabricClient, args):
+    rng = np.random.default_rng(args.seed)
+    dtype = np.dtype(args.dtype)
+    inputs = [rng.random(shape, dtype=dtype) for shape in compute_input_shapes(args.op, args.size)]
+    shapes = " , ".join("x".join(map(str, x.shape)) for x in inputs)
+    console.print(f"[bold]Compute:[/bold] {args.op} on {shapes} ({dtype.name})")
+
+    with console.status("[bold green]Running on worker GPU..."):
+        res = client.compute(args.op, *inputs, device_index=args.device)
+
+    err = relative_error(res.result, REFERENCE[args.op](*inputs))
+    ok = err <= tolerance(args.op, dtype)
+    print_compute(args.op, res, err, ok)
+    if not ok:
+        sys.exit(1)

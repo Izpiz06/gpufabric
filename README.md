@@ -163,6 +163,15 @@ python -m client execute 192.168.1.50 --a 1.0 2.0 3.0 4.0 --b 10.0 20.0 30.0 40.
 python -m client execute 192.168.1.50 --size 1000000
 ```
 
+#### 🧮 Run Tensor Operations and Verify Against numpy
+`compute` generates random inputs, runs the operation on the worker GPU, and checks the result against numpy on the client. It exits with code 1 if the result doesn't match.
+
+```bash
+python -m client compute 192.168.1.50 matmul --size 1000          # 1000x1000 @ 1000x1000
+python -m client compute 192.168.1.50 vector_dot --size 1000000 --dtype float64
+```
+Operations: `vector_add`, `vector_mul` (element-wise), `vector_dot`, `matrix_add`, `matmul`. `--size` is the vector length or square matrix size.
+
 ---
 
 ## 💻 CLI Showcase
@@ -244,7 +253,14 @@ with GPUFabricClient(host="192.168.1.50", port=50051) as client:
         device_index=0,
     )
     print(f"Output: {list(response.result)}")
-    print(f"Kernel Time: {response.execution_time_ms} ms via {response.gpu_backend}")
+
+    # 5. Tensor operations with numpy arrays
+    import numpy as np
+    a = np.random.rand(1000, 1000).astype(np.float32)
+    res = client.matmul(a, a)          # also: vector_add, vector_mul, vector_dot, matrix_add
+    print(res.result.shape)            # (1000, 1000), a numpy array
+    print(f"Kernel {res.gpu_time_ms:.3f} ms, worker {res.total_time_ms:.3f} ms, "
+          f"round trip {res.round_trip_ms:.3f} ms")
 ```
 
 ---
@@ -263,6 +279,7 @@ service GPUFabricService {
   rpc GetGPUInfo(GPUInfoRequest) returns (GPUInfoResponse);
   rpc GetGPUStatus(GPUStatusRequest) returns (GPUStatusResponse);
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc Compute(ComputeRequest) returns (ComputeResponse);
 }
 ```
 

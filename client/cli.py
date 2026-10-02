@@ -3,8 +3,8 @@
 import argparse
 import sys
 
-from client.client import GPUFabricClient, GPUFabricError
-from client.commands import cmd_discover, cmd_execute, cmd_gpu, cmd_status
+from client.client import OPERATIONS, GPUFabricClient, GPUFabricError
+from client.commands import cmd_compute, cmd_discover, cmd_execute, cmd_gpu, cmd_status
 from client.formatters import console
 from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
 
@@ -42,6 +42,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_exec.add_argument("--b", nargs="+", type=float, help="Vector B elements")
     p_exec.add_argument("--size", type=int, help="Random vector size")
 
+    p_comp = sub.add_parser(
+        "compute", help="Run a tensor operation on the remote GPU and verify it against numpy"
+    )
+    p_comp.add_argument("worker_ip", type=str, help="IP or hostname of worker")
+    p_comp.add_argument("op", choices=sorted(OPERATIONS), help="Operation to run")
+    p_comp.add_argument(
+        "--size", type=int, default=1000, help="Vector length or square matrix size (default: 1000)"
+    )
+    p_comp.add_argument("--dtype", choices=["float32", "float64"], default="float32")
+    p_comp.add_argument("--device", type=int, default=0, help="Device index (default: 0)")
+    p_comp.add_argument("--seed", type=int, default=0, help="Random seed for the inputs")
+
     return p
 
 
@@ -70,6 +82,8 @@ def main():
                 cmd_status(client, args)
             elif args.command == "execute":
                 cmd_execute(client, args)
+            elif args.command == "compute":
+                cmd_compute(client, args)
         except GPUFabricError as e:
             console.print(f"[bold red]GPU Fabric Error:[/bold red] {e}")
             sys.exit(1)

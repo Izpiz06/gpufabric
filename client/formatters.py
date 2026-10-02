@@ -69,3 +69,22 @@ def print_execution(resp: ExecuteResponse):
             console.print(
                 f"  [bold green]Result Vector C (first 5 & last 5):[/bold green] {res[:5]} ... {res[-5:]}"
             )
+
+
+def print_compute(op: str, res, rel_error: float, verified: bool):
+    t = Table(title="Compute Result")
+    t.add_column("Property", style="cyan")
+    t.add_column("Value", style="bold")
+    t.add_row("Task ID", res.task_id)
+    t.add_row("Operation", op)
+    t.add_row("Device", str(res.device_index))
+    t.add_row("Result shape", "x".join(map(str, res.result.shape)) or "scalar")
+    t.add_row("GPU kernel time", f"{res.gpu_time_ms:.4f} ms")
+    t.add_row("Worker total time", f"{res.total_time_ms:.4f} ms")
+    t.add_row("Round trip time", f"{res.round_trip_ms:.4f} ms")
+    t.add_row("Max relative error", f"{rel_error:.2e}")
+    t.add_row(
+        "Verified vs numpy",
+        "[green]PASS[/green]" if verified else "[red]FAIL[/red]",
+    )
+    console.print(t)
