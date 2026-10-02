@@ -69,3 +69,20 @@ def test_list_devices_merges_info_and_status():
 def test_list_devices_without_nvml():
     with patch("worker.gpu.HAS_PYNVML", False):
         assert GPUManager().list_devices() == []
+
+
+def test_peak_memory_bandwidth():
+    with patch("worker.gpu.HAS_PYNVML", True), patch("worker.gpu.pynvml") as mock_nvml:
+        mock_nvml.nvmlDeviceGetCount.return_value = 1
+        # RTX 3050 Laptop: 5871 MHz, 128-bit bus
+        mock_nvml.nvmlDeviceGetMaxClockInfo.return_value = 5871
+        mock_nvml.nvmlDeviceGetMemoryBusWidth.return_value = 128
+        assert GPUManager().peak_memory_bandwidth(0) == pytest.approx(187.872)
+
+        mock_nvml.nvmlDeviceGetMemoryBusWidth.side_effect = RuntimeError("not supported")
+        assert GPUManager().peak_memory_bandwidth(0) == 0.0
+
+
+def test_peak_memory_bandwidth_without_nvml():
+    with patch("worker.gpu.HAS_PYNVML", False):
+        assert GPUManager().peak_memory_bandwidth(0) == 0.0

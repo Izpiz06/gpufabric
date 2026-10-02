@@ -122,3 +122,38 @@ def test_compute_without_gpu():
     with patch.object(executor, "is_gpu_ready", return_value=False):
         with pytest.raises(GPUExecutionError):
             executor.compute("vector_add", [_f32(2), _f32(2)])
+
+
+@pytest.mark.parametrize(
+    "inputs, message",
+    [
+        ([_f32(3), _f32(3)], "takes 3 inputs"),
+        ([_f32(3), _f32(4), np.array(1.0, np.float32)], "two equal 1-D vectors"),
+        ([_f32(3), _f32(3), _f32(1)], "scalar must be 0-D"),
+        ([_f32(3), _f32(3), np.array(1.0)], "share a dtype"),
+    ],
+)
+def test_validate_triad_rejects(inputs, message):
+    with pytest.raises(ValueError, match=message):
+        validate_inputs("triad", inputs)
+
+
+@pytest.mark.parametrize(
+    "name, size, repeats, message",
+    [
+        ("stream_copy", 10, 5, "Unsupported benchmark"),
+        ("triad", 0, 5, "must be positive"),
+        ("matmul", 10, 0, "repeats must be between"),
+        ("matmul", 10, 101, "repeats must be between"),
+    ],
+)
+def test_run_benchmark_validation(name, size, repeats, message):
+    with pytest.raises(ValueError, match=message):
+        GPUExecutor().run_benchmark(name, size, repeats=repeats)
+
+
+def test_run_benchmark_without_gpu():
+    executor = GPUExecutor()
+    with patch.object(executor, "is_gpu_ready", return_value=False):
+        with pytest.raises(GPUExecutionError):
+            executor.run_benchmark("triad", 10)

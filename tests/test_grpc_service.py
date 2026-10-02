@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 
 from common.gpufabric_pb2 import (
+    Benchmark,
+    BenchmarkRequest,
     ComputeRequest,
     DType,
     ExecuteRequest,
@@ -182,3 +184,36 @@ def test_service_list_gpus_without_gpus():
         resp = servicer.ListGPUs(ListGPUsRequest(), _context())
     assert list(resp.gpus) == []
     assert resp.driver_version == ""
+
+
+def test_service_run_benchmark_triad():
+    servicer = _servicer()
+    result = {"best_ms": 3.3, "mean_ms": 3.4, "bandwidth_gb_s": 180.6}
+    with (
+        patch.object(servicer.executor, "run_benchmark", return_value=result) as run,
+        patch.object(servicer.gpu, "peak_memory_bandwidth", return_value=187.9),
+    ):
+        resp = servicer.RunBenchmark(
+            BenchmarkRequest(benchmark=Benchmark.BENCH_TRIAD, size=1000), _context()
+        )
+    assert run.call_args.args == ("triad", 1000, 0, 5)
+    assert resp.repeats == 5
+    assert resp.bandwidth_gb_s == 180.6
+    assert resp.peak_bandwidth_gb_s == 187.9
+
+
+def test_service_run_benchmark_unsupported():
+    with pytest.raises(_Aborted) as exc:
+        _servicer().RunBenchmark(BenchmarkRequest(size=10), _context())
+    assert exc.value.code == grpc.StatusCode.INVALID_ARGUMENT
+
+
+def test_service_run_benchmark_out_of_memory():
+    servicer = _servicer()
+    with patch.object(servicer.executor, "run_benchmark", side_effect=GPUOutOfMemoryError("oom")):
+        with pytest.raises(_Aborted) as exc:
+            servicer.RunBenchmark(
+                BenchmarkRequest(benchmark=Benchmark.BENCH_MATMUL, size=10**6), _context()
+            )
+    assert exc.value.code == grpc.StatusCode.RESOURCE_EXHAUSTED
+    assert servicer.state.active_tasks == 0
