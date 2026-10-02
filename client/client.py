@@ -9,6 +9,9 @@ import numpy as np
 
 from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT
 from common.gpufabric_pb2 import (
+    Benchmark,
+    BenchmarkRequest,
+    BenchmarkResponse,
     ComputeRequest,
     ExecuteRequest,
     ExecuteResponse,
@@ -33,6 +36,13 @@ OPERATIONS = {
     "vector_dot": Operation.OP_VECTOR_DOT,
     "matrix_add": Operation.OP_MATRIX_ADD,
     "matmul": Operation.OP_MATMUL,
+    "triad": Operation.OP_TRIAD,
+}
+
+BENCHMARKS = {
+    "triad": Benchmark.BENCH_TRIAD,
+    "matmul": Benchmark.BENCH_MATMUL,
+    "monte_carlo_pi": Benchmark.BENCH_MONTE_CARLO_PI,
 }
 
 
@@ -166,6 +176,26 @@ class GPUFabricClient:
             gpu_time_ms=resp.gpu_time_ms,
             total_time_ms=resp.total_time_ms,
             round_trip_ms=round_trip_ms,
+        )
+
+    def run_benchmark(
+        self, name: str, size: int, repeats: int = 5, device_index: int = 0
+    ) -> BenchmarkResponse:
+        """Run a benchmark on data generated on the worker GPU (see BENCHMARKS)."""
+        if name not in BENCHMARKS:
+            raise ValueError(f"Unknown benchmark {name!r}; choose from {sorted(BENCHMARKS)}")
+        req = BenchmarkRequest(
+            benchmark=BENCHMARKS[name], size=size, repeats=repeats, device_index=device_index
+        )
+        try:
+            return self._stub.RunBenchmark(req, timeout=self.timeout)
+        except grpc.RpcError as e:
+            raise _rpc_error(f"Benchmark {name} failed", e) from e
+
+    def triad(self, b, c, s, device_index: int = 0) -> ComputeResult:
+        """a = b + s * c on the worker GPU (s is a scalar)."""
+        return self.compute(
+            "triad", b, c, np.asarray(s, dtype=np.asarray(b).dtype), device_index=device_index
         )
 
     def vector_add(self, a, b, device_index: int = 0) -> ComputeResult:

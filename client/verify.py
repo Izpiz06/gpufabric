@@ -9,6 +9,7 @@ REFERENCE = {
     "vector_dot": np.dot,
     "matrix_add": np.add,
     "matmul": np.matmul,
+    "triad": lambda b, c, s: b + s * c,
 }
 
 # Element-wise ops are exact in IEEE arithmetic. Reductions (dot, matmul) sum

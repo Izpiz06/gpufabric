@@ -142,6 +142,22 @@ python -m worker --host 0.0.0.0 --port 50051
 
 From another machine on the LAN (e.g., your laptop):
 
+#### 📏 Benchmark a Worker (pass/fail)
+```bash
+python -m client bench 192.168.1.50
+python -m client bench 192.168.1.50 --sweep            # also find the largest workload that fits
+python -m client bench 192.168.1.50 --min-network-mb-s 50 --min-gpu-bw-pct 70
+```
+
+| Check | What it measures | Pass if |
+|---|---|---|
+| Network triad (end-to-end) | Client sends `b`, `c`; the worker GPU computes `a = b + s*c` and returns it. Bytes sent + received / round-trip time. The result is verified against numpy. | median ≥ `--min-network-mb-s` (default **2 MB/s**) |
+| GPU memory bandwidth (triad) | Same triad on data generated on the GPU, with a fused kernel. 3 × n × 4 bytes / kernel time. | ≥ `--min-gpu-bw-pct` (default **50%**) of the theoretical peak from NVML (memory clock × 2 × bus width) |
+| Matmul | 1000×1000 float32 matrix multiply, 2n³ FLOPs / kernel time | reported only |
+| Monte Carlo pi | Fraction of random points inside the unit circle × 4 | within 5σ of π |
+
+`--sweep` doubles the triad size until it would exceed 90% of free VRAM or the GPU runs out of memory, showing how much work the GPU can hold. The command exits with code 1 if any check fails.
+
 #### 🗂️ List Every GPU on Your Workers
 ```bash
 python -m client ls 192.168.1.50 192.168.1.51:6000
@@ -183,7 +199,7 @@ python -m client execute 192.168.1.50 --size 1000000
 python -m client compute 192.168.1.50 matmul --size 1000          # 1000x1000 @ 1000x1000
 python -m client compute 192.168.1.50 vector_dot --size 1000000 --dtype float64
 ```
-Operations: `vector_add`, `vector_mul` (element-wise), `vector_dot`, `matrix_add`, `matmul`. `--size` is the vector length or square matrix size.
+Operations: `vector_add`, `vector_mul` (element-wise), `vector_dot`, `matrix_add`, `matmul`, `triad` (`a = b + s*c`). `--size` is the vector length or square matrix size.
 
 ---
 
@@ -297,6 +313,7 @@ service GPUFabricService {
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
   rpc Compute(ComputeRequest) returns (ComputeResponse);
   rpc ListGPUs(ListGPUsRequest) returns (ListGPUsResponse);
+  rpc RunBenchmark(BenchmarkRequest) returns (BenchmarkResponse);
 }
 ```
 

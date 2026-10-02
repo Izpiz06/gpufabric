@@ -11,9 +11,11 @@ against numpy here. A pass shows the remote GPU was used over the network.
 
 import os
 
+import grpc
 import numpy as np
 import pytest
 
+from client import bench
 from client.client import GPUFabricClient, GPUFabricError
 from client.commands import compute_input_shapes
 from client.verify import REFERENCE, relative_error, tolerance
@@ -26,7 +28,7 @@ pytestmark = [
     pytest.mark.skipif(not WORKER, reason="set GPUFABRIC_WORKER=host:port to run remote GPU tests"),
 ]
 
-OPS = ["vector_add", "vector_mul", "vector_dot", "matrix_add", "matmul"]
+OPS = ["vector_add", "vector_mul", "vector_dot", "matrix_add", "matmul", "triad"]
 # (vector length, matrix size) pairs: small, then large enough to exceed
 # gRPC's old 4 MiB default (1M float32 vector = 4 MB, 1000x1000 = 4 MB).
 SIZES = {"small": (1_000, 64), "large": (1_000_000, 1_000)}
@@ -49,7 +51,7 @@ def test_worker_reports_gpu(client):
 @pytest.mark.parametrize("op", OPS)
 def test_compute_matches_numpy(client, op, scale, dtype):
     vec_size, mat_size = SIZES[scale]
-    size = vec_size if op.startswith("vector") else mat_size
+    size = mat_size if op.startswith("mat") else vec_size
     rng = np.random.default_rng(42)
     inputs = [rng.random(shape, dtype=dtype) for shape in compute_input_shapes(op, size)]
 
@@ -77,3 +79,44 @@ def test_list_gpus_shows_device(client):
     gpu = next(g for g in inv.gpus if g.device_index == DEVICE)
     assert gpu.name
     assert 0 < gpu.free_vram_bytes <= gpu.total_vram_bytes
+
+
+def test_triad_operation_matches_numpy(client):
+    rng = np.random.default_rng(1)
+    b, c = rng.random(1_000_000, dtype=np.float32), rng.random(1_000_000, dtype=np.float32)
+    res = client.triad(b, c, 3.0, device_index=DEVICE)
+    assert relative_error(res.result, b + np.float32(3.0) * c) <= tolerance("triad", np.float32)
+
+
+def test_gpu_triad_bandwidth_is_plausible(client):
+    r = client.run_benchmark("triad", 10_000_000, repeats=3, device_index=DEVICE)
+    assert r.bandwidth_gb_s > 0
+    if r.peak_bandwidth_gb_s:
+        # Measured bandwidth cannot meaningfully exceed the theoretical peak.
+        assert r.bandwidth_gb_s <= 1.05 * r.peak_bandwidth_gb_s
+
+
+def test_matmul_benchmark_reports_gflops(client):
+    r = client.run_benchmark("matmul", 1000, repeats=3, device_index=DEVICE)
+    assert r.gflops > 0
+    assert r.best_ms <= r.mean_ms
+
+
+def test_monte_carlo_pi_within_five_sigma(client):
+    r = client.run_benchmark("monte_carlo_pi", 10_000_000, repeats=2, device_index=DEVICE)
+    assert bench.check_pi(r.pi_estimate, 10_000_000 * r.repeats).status == "PASS"
+
+
+def test_network_throughput_meets_default_threshold(client):
+    median, _, verified = bench.measure_network(client, 1_000_000, repeats=3, device_index=DEVICE)
+    assert verified
+    assert median >= bench.DEFAULT_MIN_NETWORK_MB_S
+
+
+def test_oversized_benchmark_reports_out_of_memory(client):
+    inv = client.list_gpus()
+    gpu = next(g for g in inv.gpus if g.device_index == DEVICE)
+    too_big = gpu.total_vram_bytes // 12 + 1  # three float32 arrays won't fit
+    with pytest.raises(GPUFabricError) as exc:
+        client.run_benchmark("triad", too_big, repeats=1, device_index=DEVICE)
+    assert exc.value.code == grpc.StatusCode.RESOURCE_EXHAUSTED

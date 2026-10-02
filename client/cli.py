@@ -3,9 +3,11 @@
 import argparse
 import sys
 
+from client import bench
 from client.client import OPERATIONS, GPUFabricClient, GPUFabricError
 from client.commands import (
     WORKERS_ENV,
+    cmd_bench,
     cmd_compute,
     cmd_discover,
     cmd_execute,
@@ -69,6 +71,44 @@ def build_parser() -> argparse.ArgumentParser:
     p_comp.add_argument("--device", type=int, default=0, help="Device index (default: 0)")
     p_comp.add_argument("--seed", type=int, default=0, help="Random seed for the inputs")
 
+    p_bench = sub.add_parser(
+        "bench",
+        help="Benchmark a worker: network throughput, GPU bandwidth, matmul, Monte Carlo pi",
+    )
+    p_bench.add_argument("worker_ip", type=str, help="IP or hostname of worker")
+    p_bench.add_argument("--device", type=int, default=0, help="Device index (default: 0)")
+    p_bench.add_argument("--repeats", type=int, default=5, help="Timed runs per benchmark")
+    p_bench.add_argument(
+        "--min-network-mb-s",
+        type=float,
+        default=bench.DEFAULT_MIN_NETWORK_MB_S,
+        help=f"Minimum end-to-end throughput in MB/s (default: {bench.DEFAULT_MIN_NETWORK_MB_S})",
+    )
+    p_bench.add_argument(
+        "--min-gpu-bw-pct",
+        type=float,
+        default=bench.DEFAULT_MIN_GPU_BW_PCT,
+        help="Minimum triad bandwidth as %% of theoretical peak "
+        f"(default: {bench.DEFAULT_MIN_GPU_BW_PCT:.0f})",
+    )
+    p_bench.add_argument(
+        "--network-size",
+        type=int,
+        default=1_000_000,
+        help="Elements per vector for the network triad (default: 1000000, ~12 MB per run)",
+    )
+    p_bench.add_argument("--network-repeats", type=int, default=3)
+    p_bench.add_argument(
+        "--triad-size", type=int, default=None, help="GPU triad elements (default: auto)"
+    )
+    p_bench.add_argument("--matmul-size", type=int, default=1000)
+    p_bench.add_argument("--pi-samples", type=int, default=100_000_000)
+    p_bench.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Also double the triad size until GPU memory runs out",
+    )
+
     return p
 
 
@@ -103,6 +143,8 @@ def main():
                 cmd_execute(client, args)
             elif args.command == "compute":
                 cmd_compute(client, args)
+            elif args.command == "bench":
+                cmd_bench(client, args)
         except GPUFabricError as e:
             console.print(f"[bold red]GPU Fabric Error:[/bold red] {e}")
             sys.exit(1)

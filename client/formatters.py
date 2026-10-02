@@ -116,3 +116,37 @@ def print_inventory(rows):
                 compute,
             )
     console.print(t)
+
+
+_STATUS_STYLE = {"PASS": "green", "FAIL": "red", "INFO": "cyan", "SKIP": "yellow"}
+
+
+def print_bench_report(checks, sweep=None):
+    t = Table(title="Benchmark Report")
+    for col in ("Check", "Result", "Threshold", "Status"):
+        t.add_column(col)
+    for c in checks:
+        style = _STATUS_STYLE.get(c.status, "white")
+        t.add_row(c.name, c.value, c.threshold, f"[bold {style}]{c.status}[/bold {style}]")
+    console.print(t)
+
+    if sweep:
+        st = Table(title="Triad Size Sweep (how much work fits on this GPU)")
+        for col in ("Elements", "GPU memory used", "Bandwidth", "Note"):
+            st.add_column(col)
+        for n, bw, note in sweep:
+            st.add_row(
+                f"{n:,}",
+                bytes_to_human(n * 12),
+                f"{bw:.1f} GB/s" if bw is not None else "-",
+                note,
+            )
+        console.print(st)
+        largest = max((n for n, bw, _ in sweep if bw is not None), default=None)
+        if largest:
+            console.print(
+                f"Largest triad that ran: [bold]{largest:,}[/bold] elements "
+                f"({bytes_to_human(largest * 12)} of GPU memory)"
+            )
+        if sweep[-1][1] is not None:
+            console.print("[dim]Stopped before the next size would exceed 90% of free VRAM.[/dim]")
