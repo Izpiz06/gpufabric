@@ -8,6 +8,8 @@ service GPUFabricService {
   rpc GetGPUInfo(GPUInfoRequest) returns (GPUInfoResponse);
   rpc GetGPUStatus(GPUStatusRequest) returns (GPUStatusResponse);
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  // Run a tensor operation on a worker GPU.
+  rpc Compute(ComputeRequest) returns (ComputeResponse);
 }
 
 message HealthRequest {}
@@ -75,4 +77,48 @@ message ExecuteResponse {
   int32 device_index = 7;
   string gpu_backend = 8;
   string error = 9;
+}
+
+// ---------------------------------------------------------------------------
+// Generic tensor compute
+// ---------------------------------------------------------------------------
+
+enum DType {
+  DTYPE_UNSPECIFIED = 0;
+  FLOAT32 = 1;
+  FLOAT64 = 2;
+}
+
+// An n-dimensional array. `data` holds the raw little-endian values in
+// row-major (C) order, so len(data) == product(shape) * itemsize(dtype).
+// An empty shape is a scalar.
+message Tensor {
+  DType dtype = 1;
+  repeated int64 shape = 2;
+  bytes data = 3;
+}
+
+// Enum values share the package scope, so these are prefixed with OP_ to
+// avoid clashing with WorkloadType.VECTOR_ADD.
+enum Operation {
+  OPERATION_UNSPECIFIED = 0;
+  OP_VECTOR_ADD = 1;   // c = a + b            a, b: [n]
+  OP_VECTOR_MUL = 2;   // c = a * b            a, b: [n] (element-wise)
+  OP_VECTOR_DOT = 3;   // c = sum(a * b)       a, b: [n] -> scalar
+  OP_MATRIX_ADD = 4;   // C = A + B            A, B: [m, n]
+  OP_MATMUL = 5;       // C = A @ B            A: [m, k], B: [k, n] -> [m, n]
+}
+
+message ComputeRequest {
+  Operation op = 1;
+  repeated Tensor inputs = 2;
+  int32 device_index = 3;
+}
+
+message ComputeResponse {
+  string task_id = 1;
+  Tensor result = 2;
+  double gpu_time_ms = 3;    // kernel only, measured with CUDA events
+  double total_time_ms = 4;  // on the worker: host->device copy + kernel + device->host copy
+  int32 device_index = 5;
 }

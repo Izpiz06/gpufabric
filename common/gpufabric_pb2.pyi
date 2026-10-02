@@ -2,7 +2,7 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
@@ -11,8 +11,32 @@ class WorkloadType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     WORKLOAD_UNSPECIFIED: _ClassVar[WorkloadType]
     VECTOR_ADD: _ClassVar[WorkloadType]
+
+class DType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    DTYPE_UNSPECIFIED: _ClassVar[DType]
+    FLOAT32: _ClassVar[DType]
+    FLOAT64: _ClassVar[DType]
+
+class Operation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OPERATION_UNSPECIFIED: _ClassVar[Operation]
+    OP_VECTOR_ADD: _ClassVar[Operation]
+    OP_VECTOR_MUL: _ClassVar[Operation]
+    OP_VECTOR_DOT: _ClassVar[Operation]
+    OP_MATRIX_ADD: _ClassVar[Operation]
+    OP_MATMUL: _ClassVar[Operation]
 WORKLOAD_UNSPECIFIED: WorkloadType
 VECTOR_ADD: WorkloadType
+DTYPE_UNSPECIFIED: DType
+FLOAT32: DType
+FLOAT64: DType
+OPERATION_UNSPECIFIED: Operation
+OP_VECTOR_ADD: Operation
+OP_VECTOR_MUL: Operation
+OP_VECTOR_DOT: Operation
+OP_MATRIX_ADD: Operation
+OP_MATMUL: Operation
 
 class HealthRequest(_message.Message):
     __slots__ = ()
@@ -123,3 +147,37 @@ class ExecuteResponse(_message.Message):
     gpu_backend: str
     error: str
     def __init__(self, task_id: _Optional[str] = ..., workload_type: _Optional[str] = ..., status: _Optional[str] = ..., result: _Optional[_Iterable[float]] = ..., result_length: _Optional[int] = ..., execution_time_ms: _Optional[float] = ..., device_index: _Optional[int] = ..., gpu_backend: _Optional[str] = ..., error: _Optional[str] = ...) -> None: ...
+
+class Tensor(_message.Message):
+    __slots__ = ("dtype", "shape", "data")
+    DTYPE_FIELD_NUMBER: _ClassVar[int]
+    SHAPE_FIELD_NUMBER: _ClassVar[int]
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    dtype: DType
+    shape: _containers.RepeatedScalarFieldContainer[int]
+    data: bytes
+    def __init__(self, dtype: _Optional[_Union[DType, str]] = ..., shape: _Optional[_Iterable[int]] = ..., data: _Optional[bytes] = ...) -> None: ...
+
+class ComputeRequest(_message.Message):
+    __slots__ = ("op", "inputs", "device_index")
+    OP_FIELD_NUMBER: _ClassVar[int]
+    INPUTS_FIELD_NUMBER: _ClassVar[int]
+    DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
+    op: Operation
+    inputs: _containers.RepeatedCompositeFieldContainer[Tensor]
+    device_index: int
+    def __init__(self, op: _Optional[_Union[Operation, str]] = ..., inputs: _Optional[_Iterable[_Union[Tensor, _Mapping]]] = ..., device_index: _Optional[int] = ...) -> None: ...
+
+class ComputeResponse(_message.Message):
+    __slots__ = ("task_id", "result", "gpu_time_ms", "total_time_ms", "device_index")
+    TASK_ID_FIELD_NUMBER: _ClassVar[int]
+    RESULT_FIELD_NUMBER: _ClassVar[int]
+    GPU_TIME_MS_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_TIME_MS_FIELD_NUMBER: _ClassVar[int]
+    DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
+    task_id: str
+    result: Tensor
+    gpu_time_ms: float
+    total_time_ms: float
+    device_index: int
+    def __init__(self, task_id: _Optional[str] = ..., result: _Optional[_Union[Tensor, _Mapping]] = ..., gpu_time_ms: _Optional[float] = ..., total_time_ms: _Optional[float] = ..., device_index: _Optional[int] = ...) -> None: ...
