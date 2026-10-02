@@ -4,8 +4,8 @@ on:
   push:
     branches: [ "main" ]
     tags: [ "v*" ]
+  # Every PR, including stacked PRs whose base is another feature branch.
   pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:

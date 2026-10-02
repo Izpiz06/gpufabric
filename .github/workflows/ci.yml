@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+  # Every PR, including stacked PRs whose base is another feature branch.
   pull_request:
-    branches: [ "main" ]
 
 jobs:
   lint:
