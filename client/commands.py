@@ -101,14 +101,15 @@ def resolve_workers(workers: List[str]) -> List[str]:
 
 
 def collect_inventory(
-    workers: List[str], port: int, timeout: float, max_message_mb: int
+    workers: List[str], **client_kwargs
 ) -> List[Tuple[str, Union[ListGPUsResponse, str]]]:
-    """Query ListGPUs on each worker. Unreachable workers get an error string."""
+    """Query ListGPUs on each worker. Unreachable workers get an error string.
+
+    client_kwargs are passed to GPUFabricClient (port, timeout, tls_dir, ...).
+    """
     rows = []
     for worker in workers:
-        with GPUFabricClient(
-            host=worker, port=port, timeout=timeout, max_message_mb=max_message_mb
-        ) as client:
+        with GPUFabricClient(host=worker, **client_kwargs) as client:
             try:
                 rows.append((client.target, client.list_gpus()))
             except GPUFabricError as e:
@@ -116,7 +117,7 @@ def collect_inventory(
     return rows
 
 
-def cmd_ls(args):
+def cmd_ls(args, client_kwargs):
     workers = resolve_workers(args.workers)
     if not workers:
         console.print(
@@ -124,7 +125,7 @@ def cmd_ls(args):
         )
         sys.exit(2)
     with console.status("[bold green]Querying workers..."):
-        rows = collect_inventory(workers, args.port, args.timeout, args.max_message_mb)
+        rows = collect_inventory(workers, **client_kwargs)
     print_inventory(rows)
     if all(isinstance(result, str) for _, result in rows):
         sys.exit(1)

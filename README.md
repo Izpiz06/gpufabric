@@ -26,6 +26,7 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 - [Architecture](#-architecture)
 - [Installation](#-installation)
 - [Quickstart Guide](#-quickstart-guide)
+  - [0. Create Certificates (Once)](#0-create-certificates-once)
   - [1. Launch Worker (GPU Node)](#1-launch-worker-gpu-node)
   - [2. Use Client CLI (Client Node)](#2-use-client-cli-client-node)
 - [CLI Showcase](#-cli-showcase)
@@ -52,6 +53,7 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 * 🔍 **Zero-Friction Discovery**: Connect to any worker over LAN to inspect hardware specs and cluster readiness.
 * 📊 **Live NVML Telemetry**: Real-time VRAM allocation, GPU core utilization, memory controller load, and temperatures via NVIDIA NVML.
 * ⚡ **Physical GPU Kernel Execution**: Workloads execute directly on physical GPU memory via **CuPy** (no CPU fallback).
+* 🔐 **Mutual TLS by Default**: Traffic is encrypted and workers only accept clients holding a certificate signed by your CA. One command sets it up.
 * 🖥️ **Rich Interactive CLI**: Built-in formatted terminal user interface with status indicators, tables, and execution metrics.
 * 🧩 **Modular & Clean Architecture**: Codebase is split into single-responsibility, maintainable sub-modules.
 
@@ -120,6 +122,24 @@ Without cuBLAS, element-wise ops work but `vector_dot` and `matmul` fail with `l
 
 ## ⚡ Quickstart Guide
 
+### 0. Create Certificates (Once)
+
+Workers and clients talk over **mutual TLS**: traffic is encrypted, and a worker only accepts clients whose certificate was signed by your CA. On the worker machine, list the IPs/hostnames clients will use to reach it:
+
+```bash
+gpufabric-certs init --hosts 192.168.1.50,gpu-box
+```
+
+This writes a CA, a worker certificate and a client certificate to `~/.config/gpufabric/tls/` (private keys are `chmod 600`). For each client machine, issue a bundle and copy it over:
+
+```bash
+gpufabric-certs add-client laptop
+# copy ~/.config/gpufabric/tls/clients/laptop/{ca.crt,client.crt,client.key}
+# to ~/.config/gpufabric/tls/ on the laptop
+```
+
+Keep `ca.key` private: whoever holds it can authorize new clients. Set `GPUFABRIC_TLS_DIR` or pass `--tls-dir` to use another directory.
+
 ### 1. Launch Worker (GPU Node)
 
 Run the worker on the machine containing the NVIDIA GPU:
@@ -135,12 +155,14 @@ python -m worker --host 0.0.0.0 --port 50051
 * `--log-level`: `debug`, `info`, `warning`, `error`
 * `--max-message-mb`: Max gRPC message size in MiB (default: `256`, max: `2047`). The client CLI accepts the same flag; set both sides when sending larger payloads.
 * `--no-warmup`: Skip the warm-up kernel that runs on every GPU at startup to absorb the one-time CUDA initialization cost
+* `--tls-dir`: Directory with `ca.crt`, `server.crt`, `server.key` (default: `~/.config/gpufabric/tls`). The worker refuses to start if they are missing.
+* `--insecure`: Run without TLS. Traffic is plaintext and any client on the network can use the GPU; use only for local testing.
 
 ---
 
 ### 2. Use Client CLI (Client Node)
 
-From another machine on the LAN (e.g., your laptop):
+From another machine on the LAN (e.g., your laptop). The client reads its certificates from `~/.config/gpufabric/tls` by default; global flags `--tls-dir DIR` and `--insecure` go **before** the sub-command (e.g. `python -m client --insecure ls 192.168.1.50`).
 
 #### 📏 Benchmark a Worker (pass/fail)
 ```bash
@@ -263,7 +285,8 @@ import numpy as np
 
 from client import GPUFabricClient
 
-# Connect to the remote worker via gRPC
+# Connect over mutual TLS (certificates from ~/.config/gpufabric/tls,
+# or pass tls_dir=...; insecure=True only for a worker run with --insecure)
 with GPUFabricClient(host="192.168.1.50", port=50051) as client:
     # 1. Health check
     health = client.health()
@@ -328,6 +351,8 @@ gpufabric/
 ├── client/
 │   ├── __init__.py           # Exports GPUFabricClient
 │   ├── client.py             # Core gRPC Python client SDK
+│   ├── bench.py              # Benchmark pass/fail checks
+│   ├── verify.py             # numpy reference results for verification
 │   ├── commands.py           # CLI sub-command handlers
 │   ├── formatters.py         # Rich terminal output formatters
 │   ├── cli.py                # Argument parsing & dispatch
@@ -347,6 +372,9 @@ gpufabric/
 │   ├── gpufabric_pb2_grpc.py # Generated gRPC stubs & servicer
 │   ├── constants.py          # Port, version & message size constants
 │   ├── grpc_options.py       # Shared gRPC channel/server options
+│   ├── tensor.py             # numpy <-> Tensor message conversion
+│   ├── tls.py                # mTLS certificates & gRPC credentials
+│   ├── certs_cli.py          # gpufabric-certs command
 │   └── formatting.py         # Human-readable formatters
 ├── scripts/
 │   └── gen_proto.py          # Regenerates common/gpufabric_pb2*.py

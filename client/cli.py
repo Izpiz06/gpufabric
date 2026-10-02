@@ -2,6 +2,7 @@
 
 import argparse
 import sys
+from pathlib import Path
 
 from client import bench
 from client.client import OPERATIONS, GPUFabricClient, GPUFabricError
@@ -17,6 +18,7 @@ from client.commands import (
 )
 from client.formatters import console
 from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
+from common.tls import default_tls_dir
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +32,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_MAX_MESSAGE_MB,
         help=f"Max gRPC message size in MiB (default: {DEFAULT_MAX_MESSAGE_MB})",
+    )
+
+    p.add_argument(
+        "--tls-dir",
+        type=Path,
+        default=None,
+        help=f"Directory with ca.crt, client.crt, client.key (default: {default_tls_dir()})",
+    )
+    p.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Connect without TLS (only for workers started with --insecure)",
     )
 
     sub = p.add_subparsers(dest="command", help="Command")
@@ -122,16 +136,23 @@ def main():
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
 
-    if args.command == "ls":
-        cmd_ls(args)
-        return
+    client_kwargs = {
+        "port": args.port,
+        "timeout": args.timeout,
+        "max_message_mb": args.max_message_mb,
+        "tls_dir": args.tls_dir,
+        "insecure": args.insecure,
+    }
+    try:
+        if args.command == "ls":
+            cmd_ls(args, client_kwargs)
+            return
+        client = GPUFabricClient(host=args.worker_ip, **client_kwargs)
+    except GPUFabricError as e:
+        console.print(f"[bold red]GPU Fabric Error:[/bold red] {e}")
+        sys.exit(2)
 
-    with GPUFabricClient(
-        host=args.worker_ip,
-        port=args.port,
-        timeout=args.timeout,
-        max_message_mb=args.max_message_mb,
-    ) as client:
+    with client:
         try:
             if args.command == "discover":
                 cmd_discover(client, args)

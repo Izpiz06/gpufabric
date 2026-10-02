@@ -4,6 +4,9 @@ These run only when GPUFABRIC_WORKER points at a running worker, e.g.
 
     GPUFABRIC_WORKER=192.168.1.50:50051 pytest -m remote_gpu -v
 
+Certificates are read from GPUFABRIC_TLS_DIR or ~/.config/gpufabric/tls.
+Set GPUFABRIC_INSECURE=1 for a worker started with --insecure.
+
 CI has no GPU, so they are skipped there. Each test sends data from this
 machine, the worker computes on its GPU, and the result is checked
 against numpy here. A pass shows the remote GPU was used over the network.
@@ -22,6 +25,9 @@ from client.verify import REFERENCE, relative_error, tolerance
 
 WORKER = os.environ.get("GPUFABRIC_WORKER")
 DEVICE = int(os.environ.get("GPUFABRIC_DEVICE", "0"))
+# mTLS certificates come from GPUFABRIC_TLS_DIR (or the default directory).
+# Set GPUFABRIC_INSECURE=1 to test a worker started with --insecure.
+INSECURE = os.environ.get("GPUFABRIC_INSECURE") == "1"
 
 pytestmark = [
     pytest.mark.remote_gpu,
@@ -36,7 +42,7 @@ SIZES = {"small": (1_000, 64), "large": (1_000_000, 1_000)}
 
 @pytest.fixture(scope="module")
 def client():
-    with GPUFabricClient(host=WORKER, timeout=120.0) as c:
+    with GPUFabricClient(host=WORKER, timeout=120.0, insecure=INSECURE) as c:
         yield c
 
 

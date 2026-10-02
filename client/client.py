@@ -2,7 +2,8 @@
 
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Union
 
 import grpc
 import numpy as np
@@ -29,6 +30,7 @@ from common.gpufabric_pb2 import (
 from common.gpufabric_pb2_grpc import GPUFabricServiceStub
 from common.grpc_options import message_size_options
 from common.tensor import from_tensor, to_tensor
+from common.tls import TLSConfigError, channel_credentials, default_tls_dir
 
 OPERATIONS = {
     "vector_add": Operation.OP_VECTOR_ADD,
@@ -84,7 +86,12 @@ class GPUFabricClient:
         port: int = DEFAULT_PORT,
         timeout: float = 15.0,
         max_message_mb: int = DEFAULT_MAX_MESSAGE_MB,
+        tls_dir: Optional[Union[str, Path]] = None,
+        insecure: bool = False,
     ):
+        """Connect with mutual TLS using certificates from tls_dir (default:
+        ~/.config/gpufabric/tls). Pass insecure=True only for a worker started
+        with --insecure."""
         # Format address
         if ":" in host:
             self.target = host
@@ -92,9 +99,15 @@ class GPUFabricClient:
             self.target = f"{host}:{port}"
 
         self.timeout = timeout
-        self._channel = grpc.insecure_channel(
-            self.target, options=message_size_options(max_message_mb)
-        )
+        options = message_size_options(max_message_mb)
+        if insecure:
+            self._channel = grpc.insecure_channel(self.target, options=options)
+        else:
+            try:
+                creds = channel_credentials(Path(tls_dir) if tls_dir else default_tls_dir())
+            except TLSConfigError as e:
+                raise GPUFabricError(f"{e} Or use insecure=True / --insecure.") from e
+            self._channel = grpc.secure_channel(self.target, creds, options=options)
         self._stub = GPUFabricServiceStub(self._channel)
 
     def close(self):
