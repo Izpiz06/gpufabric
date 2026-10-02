@@ -4,7 +4,7 @@ from typing import List
 
 import grpc
 
-from common.constants import DEFAULT_PORT
+from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT
 from common.gpufabric_pb2 import (
     ExecuteRequest,
     ExecuteResponse,
@@ -17,6 +17,7 @@ from common.gpufabric_pb2 import (
     WorkloadType,
 )
 from common.gpufabric_pb2_grpc import GPUFabricServiceStub
+from common.grpc_options import message_size_options
 
 
 class GPUFabricError(Exception):
@@ -28,7 +29,13 @@ class GPUFabricError(Exception):
 class GPUFabricClient:
     """Client for querying GPU workers and executing workloads via gRPC."""
 
-    def __init__(self, host: str = "localhost", port: int = DEFAULT_PORT, timeout: float = 15.0):
+    def __init__(
+        self,
+        host: str = "localhost",
+        port: int = DEFAULT_PORT,
+        timeout: float = 15.0,
+        max_message_mb: int = DEFAULT_MAX_MESSAGE_MB,
+    ):
         # Format address
         if ":" in host:
             self.target = host
@@ -36,7 +43,9 @@ class GPUFabricClient:
             self.target = f"{host}:{port}"
 
         self.timeout = timeout
-        self._channel = grpc.insecure_channel(self.target)
+        self._channel = grpc.insecure_channel(
+            self.target, options=message_size_options(max_message_mb)
+        )
         self._stub = GPUFabricServiceStub(self._channel)
 
     def close(self):

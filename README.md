@@ -133,6 +133,7 @@ python -m worker --host 0.0.0.0 --port 50051
 * `--port`: Port number (default: `50051`)
 * `--worker-id`: Custom name/tag for the worker node
 * `--log-level`: `debug`, `info`, `warning`, `error`
+* `--max-message-mb`: Max gRPC message size in MiB (default: `256`, max: `2047`). The client CLI accepts the same flag; set both sides when sending larger payloads.
 
 ---
 
@@ -295,7 +296,8 @@ gpufabric/
 │   ├── gpufabric_pb2.py      # Generated protobuf classes
 │   ├── gpufabric_pb2.pyi     # Generated type stubs
 │   ├── gpufabric_pb2_grpc.py # Generated gRPC stubs & servicer
-│   ├── constants.py          # Port & version constants
+│   ├── constants.py          # Port, version & message size constants
+│   ├── grpc_options.py       # Shared gRPC channel/server options
 │   └── formatting.py         # Human-readable formatters
 ├── scripts/
 │   └── gen_proto.py          # Regenerates common/gpufabric_pb2*.py
