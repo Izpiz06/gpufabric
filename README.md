@@ -103,15 +103,18 @@ pip install -e .
 ```
 
 ### 2. Install CuPy (On Worker Machine)
-The worker runs GPU work through [CuPy](https://cupy.dev). Install the build matching your driver's CUDA major version:
+The worker runs GPU work through [CuPy](https://cupy.dev). Install the build matching the CUDA libraries you will use (`nvidia-smi` shows the newest CUDA version your driver supports):
 
 ```bash
-# CUDA 12.x drivers
-pip install cupy-cuda12x
-
-# CUDA 11.x drivers
-pip install cupy-cuda11x
+pip install cupy-cuda12x   # CUDA 12.x
+pip install cupy-cuda13x   # CUDA 13.x
 ```
+
+CuPy also needs the CUDA runtime, NVRTC and cuBLAS libraries of the **same major version**. If the CUDA Toolkit for that version isn't installed system-wide, install them from pip (shown for CUDA 12):
+```bash
+pip install nvidia-cuda-runtime-cu12 nvidia-cuda-nvrtc-cu12 nvidia-cublas-cu12
+```
+Without cuBLAS, element-wise ops work but `vector_dot` and `matmul` fail with `libcublas.so.12: cannot open shared object file`.
 
 ---
 
