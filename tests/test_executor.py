@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from worker.executor import GPUExecutionError, GPUExecutor, validate_inputs
+from worker.executor import (
+    OPERATIONS,
+    GPUExecutionError,
+    GPUExecutor,
+    sample_inputs,
+    validate_inputs,
+)
 
 
 def test_executor_validation():
@@ -49,12 +55,24 @@ def test_warmup_skips_without_gpu():
 def test_warmup_runs_each_device_and_survives_failures():
     executor = GPUExecutor()
     executor.device_count = 2
-    with patch.object(executor, "is_gpu_ready", return_value=True):
-        with patch.object(
+    with (
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(
             executor, "execute_vector_add", side_effect=[RuntimeError("boom"), ([2.0], 0.1, "cupy")]
-        ) as run:
-            executor.warmup()
-            assert [c.args[2] for c in run.call_args_list] == [0, 1]
+        ) as run,
+        patch.object(executor, "compute") as compute,
+    ):
+        executor.warmup()
+    assert [c.args[2] for c in run.call_args_list] == [0, 1]
+    # Device 0 failed early; device 1 compiled every op for both dtypes.
+    assert {c.args[2] for c in compute.call_args_list} == {1}
+    assert compute.call_count == 2 * len(OPERATIONS)
+
+
+@pytest.mark.parametrize("op", sorted(OPERATIONS))
+def test_sample_inputs_are_valid(op):
+    for dtype in (np.float32, np.float64):
+        validate_inputs(op, sample_inputs(op, dtype))
 
 
 def _f32(*shape):

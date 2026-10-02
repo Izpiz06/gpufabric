@@ -18,6 +18,13 @@ OPERATIONS = {
 }
 
 
+def sample_inputs(op: str, dtype) -> List[np.ndarray]:
+    """Tiny valid operands for `op`, used to compile its kernel during warm-up."""
+    if op.startswith("vector"):
+        return [np.ones(2, dtype=dtype), np.ones(2, dtype=dtype)]
+    return [np.ones((2, 2), dtype=dtype), np.ones((2, 2), dtype=dtype)]
+
+
 class GPUExecutionError(Exception):
     """Raised when GPU execution fails or GPU runtime is absent."""
 
@@ -80,18 +87,24 @@ class GPUExecutor:
         return self.device_count > 0
 
     def warmup(self) -> None:
-        """Run a tiny kernel on every GPU to absorb the one-time cold start.
+        """Run every kernel once on every GPU to absorb one-time startup costs.
 
-        The first GPU call pays for CUDA context creation and kernel
-        compilation (~250 ms on an RTX 3050). Doing it at startup keeps that
-        cost out of the first client request. Failures are logged, never raised.
+        The first GPU call pays for CUDA context creation (~250 ms on an
+        RTX 3050), and each operation/dtype pair compiles its kernel on first
+        use (30-110 ms each). Doing it at startup keeps those costs out of
+        client requests. Failures are logged, never raised.
         """
         if not self.is_gpu_ready():
             logger.info("GPU warm-up skipped: no GPU backend available")
             return
         for device_index in range(self.device_count):
+            t0 = time.perf_counter()
             try:
-                _, elapsed_ms, _ = self.execute_vector_add([1.0], [1.0], device_index)
+                self.execute_vector_add([1.0], [1.0], device_index)
+                for dtype in (np.float32, np.float64):
+                    for op in OPERATIONS:
+                        self.compute(op, sample_inputs(op, dtype), device_index)
+                elapsed_ms = (time.perf_counter() - t0) * 1000.0
                 logger.info(f"GPU {device_index} warm-up done ({elapsed_ms:.1f} ms)")
             except Exception as e:
                 logger.warning(f"GPU {device_index} warm-up failed: {e}")
