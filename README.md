@@ -293,9 +293,12 @@ gpufabric/
 ├── common/
 │   ├── __init__.py
 │   ├── gpufabric_pb2.py      # Generated protobuf classes
+│   ├── gpufabric_pb2.pyi     # Generated type stubs
 │   ├── gpufabric_pb2_grpc.py # Generated gRPC stubs & servicer
 │   ├── constants.py          # Port & version constants
 │   └── formatting.py         # Human-readable formatters
+├── scripts/
+│   └── gen_proto.py          # Regenerates common/gpufabric_pb2*.py
 ├── tests/
 │   ├── test_client.py        # Client gRPC tests
 │   ├── test_common.py        # Protocol & formatting tests
@@ -319,7 +322,16 @@ pytest -v
 Run code formatting and linting:
 ```bash
 ruff check .
+ruff format --check .
 ```
+
+### Regenerating gRPC code
+
+After editing `proto/gpufabric.proto`, regenerate the Python code (requires `grpcio-tools==1.84.0`, the version CI checks against):
+```bash
+python scripts/gen_proto.py
+```
+Never edit `common/gpufabric_pb2*.py` by hand. CI regenerates them and fails if the committed files differ.
 
 ---
 
