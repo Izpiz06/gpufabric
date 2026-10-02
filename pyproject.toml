@@ -49,6 +49,9 @@ packages = ["client", "worker", "common"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "remote_gpu: needs a running worker with a GPU (set GPUFABRIC_WORKER=host:port)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -230,6 +230,8 @@ Executing Workload: C = A + B (size: 3)
 Use `GPUFabricClient` directly within your Python applications:
 
 ```python
+import numpy as np
+
 from client import GPUFabricClient
 
 # Connect to the remote worker via gRPC
@@ -255,12 +257,13 @@ with GPUFabricClient(host="192.168.1.50", port=50051) as client:
     print(f"Output: {list(response.result)}")
 
     # 5. Tensor operations with numpy arrays
-    import numpy as np
     a = np.random.rand(1000, 1000).astype(np.float32)
-    res = client.matmul(a, a)          # also: vector_add, vector_mul, vector_dot, matrix_add
-    print(res.result.shape)            # (1000, 1000), a numpy array
-    print(f"Kernel {res.gpu_time_ms:.3f} ms, worker {res.total_time_ms:.3f} ms, "
-          f"round trip {res.round_trip_ms:.3f} ms")
+    res = client.matmul(a, a)  # also: vector_add, vector_mul, vector_dot, matrix_add
+    print(res.result.shape)  # (1000, 1000), a numpy array
+    print(
+        f"Kernel {res.gpu_time_ms:.3f} ms, worker {res.total_time_ms:.3f} ms, "
+        f"round trip {res.round_trip_ms:.3f} ms"
+    )
 ```
 
 ---
@@ -335,6 +338,14 @@ Run the automated test suite:
 ```bash
 pytest -v
 ```
+
+### Remote GPU tests
+
+`tests/test_remote_gpu.py` checks that a real worker GPU is reachable and computes correctly over the network: every operation, float32/float64, up to 1M-element vectors and 1000x1000 matrices, verified against numpy. Start a worker, then point the tests at it:
+```bash
+GPUFABRIC_WORKER=192.168.1.50:50051 pytest -m remote_gpu -v
+```
+Set `GPUFABRIC_DEVICE` to test a GPU other than `0`. Without `GPUFABRIC_WORKER` these tests are skipped, which is what happens in CI.
 
 Run code formatting and linting:
 ```bash
