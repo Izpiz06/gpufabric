@@ -60,6 +60,11 @@ class GPUFabricServiceStub:
                 request_serializer=common_dot_gpufabric__pb2.ComputeRequest.SerializeToString,
                 response_deserializer=common_dot_gpufabric__pb2.ComputeResponse.FromString,
                 _registered_method=True)
+        self.ListGPUs = channel.unary_unary(
+                '/gpufabric.GPUFabricService/ListGPUs',
+                request_serializer=common_dot_gpufabric__pb2.ListGPUsRequest.SerializeToString,
+                response_deserializer=common_dot_gpufabric__pb2.ListGPUsResponse.FromString,
+                _registered_method=True)
 
 
 class GPUFabricServiceServicer:
@@ -97,6 +102,13 @@ class GPUFabricServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListGPUs(self, request, context):
+        """List every GPU on the worker with its specs and live status.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GPUFabricServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -124,6 +136,11 @@ def add_GPUFabricServiceServicer_to_server(servicer, server):
                     servicer.Compute,
                     request_deserializer=common_dot_gpufabric__pb2.ComputeRequest.FromString,
                     response_serializer=common_dot_gpufabric__pb2.ComputeResponse.SerializeToString,
+            ),
+            'ListGPUs': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListGPUs,
+                    request_deserializer=common_dot_gpufabric__pb2.ListGPUsRequest.FromString,
+                    response_serializer=common_dot_gpufabric__pb2.ListGPUsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -262,6 +279,33 @@ class GPUFabricService:
             '/gpufabric.GPUFabricService/Compute',
             common_dot_gpufabric__pb2.ComputeRequest.SerializeToString,
             common_dot_gpufabric__pb2.ComputeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListGPUs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/gpufabric.GPUFabricService/ListGPUs',
+            common_dot_gpufabric__pb2.ListGPUsRequest.SerializeToString,
+            common_dot_gpufabric__pb2.ListGPUsResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -181,3 +181,39 @@ class ComputeResponse(_message.Message):
     total_time_ms: float
     device_index: int
     def __init__(self, task_id: _Optional[str] = ..., result: _Optional[_Union[Tensor, _Mapping]] = ..., gpu_time_ms: _Optional[float] = ..., total_time_ms: _Optional[float] = ..., device_index: _Optional[int] = ...) -> None: ...
+
+class ListGPUsRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class GPUDevice(_message.Message):
+    __slots__ = ("device_index", "name", "total_vram_bytes", "free_vram_bytes", "compute_capability", "gpu_utilization_pct", "temperature_c")
+    DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    TOTAL_VRAM_BYTES_FIELD_NUMBER: _ClassVar[int]
+    FREE_VRAM_BYTES_FIELD_NUMBER: _ClassVar[int]
+    COMPUTE_CAPABILITY_FIELD_NUMBER: _ClassVar[int]
+    GPU_UTILIZATION_PCT_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_C_FIELD_NUMBER: _ClassVar[int]
+    device_index: int
+    name: str
+    total_vram_bytes: int
+    free_vram_bytes: int
+    compute_capability: str
+    gpu_utilization_pct: int
+    temperature_c: int
+    def __init__(self, device_index: _Optional[int] = ..., name: _Optional[str] = ..., total_vram_bytes: _Optional[int] = ..., free_vram_bytes: _Optional[int] = ..., compute_capability: _Optional[str] = ..., gpu_utilization_pct: _Optional[int] = ..., temperature_c: _Optional[int] = ...) -> None: ...
+
+class ListGPUsResponse(_message.Message):
+    __slots__ = ("worker_id", "version", "driver_version", "compute_ready", "gpus")
+    WORKER_ID_FIELD_NUMBER: _ClassVar[int]
+    VERSION_FIELD_NUMBER: _ClassVar[int]
+    DRIVER_VERSION_FIELD_NUMBER: _ClassVar[int]
+    COMPUTE_READY_FIELD_NUMBER: _ClassVar[int]
+    GPUS_FIELD_NUMBER: _ClassVar[int]
+    worker_id: str
+    version: str
+    driver_version: str
+    compute_ready: bool
+    gpus: _containers.RepeatedCompositeFieldContainer[GPUDevice]
+    def __init__(self, worker_id: _Optional[str] = ..., version: _Optional[str] = ..., driver_version: _Optional[str] = ..., compute_ready: _Optional[bool] = ..., gpus: _Optional[_Iterable[_Union[GPUDevice, _Mapping]]] = ...) -> None: ...

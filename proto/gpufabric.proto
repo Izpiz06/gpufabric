@@ -10,6 +10,8 @@ service GPUFabricService {
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
   // Run a tensor operation on a worker GPU.
   rpc Compute(ComputeRequest) returns (ComputeResponse);
+  // List every GPU on the worker with its specs and live status.
+  rpc ListGPUs(ListGPUsRequest) returns (ListGPUsResponse);
 }
 
 message HealthRequest {}
@@ -121,4 +123,30 @@ message ComputeResponse {
   double gpu_time_ms = 3;    // kernel only, measured with CUDA events
   double total_time_ms = 4;  // on the worker: host->device copy + kernel + device->host copy
   int32 device_index = 5;
+}
+
+// ---------------------------------------------------------------------------
+// GPU inventory
+// ---------------------------------------------------------------------------
+
+message ListGPUsRequest {}
+
+message GPUDevice {
+  int32 device_index = 1;
+  string name = 2;
+  int64 total_vram_bytes = 3;
+  int64 free_vram_bytes = 4;
+  string compute_capability = 5;
+  int32 gpu_utilization_pct = 6;
+  int32 temperature_c = 7;
+}
+
+message ListGPUsResponse {
+  string worker_id = 1;
+  string version = 2;
+  string driver_version = 3;
+  // True if the worker can run Compute jobs (CuPy found a GPU). NVML can
+  // see GPUs even when CuPy is missing, so this is reported separately.
+  bool compute_ready = 4;
+  repeated GPUDevice gpus = 5;
 }
