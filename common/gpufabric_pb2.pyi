@@ -26,6 +26,14 @@ class Operation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     OP_VECTOR_DOT: _ClassVar[Operation]
     OP_MATRIX_ADD: _ClassVar[Operation]
     OP_MATMUL: _ClassVar[Operation]
+    OP_TRIAD: _ClassVar[Operation]
+
+class Benchmark(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    BENCHMARK_UNSPECIFIED: _ClassVar[Benchmark]
+    BENCH_TRIAD: _ClassVar[Benchmark]
+    BENCH_MATMUL: _ClassVar[Benchmark]
+    BENCH_MONTE_CARLO_PI: _ClassVar[Benchmark]
 WORKLOAD_UNSPECIFIED: WorkloadType
 VECTOR_ADD: WorkloadType
 DTYPE_UNSPECIFIED: DType
@@ -37,6 +45,11 @@ OP_VECTOR_MUL: Operation
 OP_VECTOR_DOT: Operation
 OP_MATRIX_ADD: Operation
 OP_MATMUL: Operation
+OP_TRIAD: Operation
+BENCHMARK_UNSPECIFIED: Benchmark
+BENCH_TRIAD: Benchmark
+BENCH_MATMUL: Benchmark
+BENCH_MONTE_CARLO_PI: Benchmark
 
 class HealthRequest(_message.Message):
     __slots__ = ()
@@ -217,3 +230,39 @@ class ListGPUsResponse(_message.Message):
     compute_ready: bool
     gpus: _containers.RepeatedCompositeFieldContainer[GPUDevice]
     def __init__(self, worker_id: _Optional[str] = ..., version: _Optional[str] = ..., driver_version: _Optional[str] = ..., compute_ready: _Optional[bool] = ..., gpus: _Optional[_Iterable[_Union[GPUDevice, _Mapping]]] = ...) -> None: ...
+
+class BenchmarkRequest(_message.Message):
+    __slots__ = ("benchmark", "size", "device_index", "repeats")
+    BENCHMARK_FIELD_NUMBER: _ClassVar[int]
+    SIZE_FIELD_NUMBER: _ClassVar[int]
+    DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
+    REPEATS_FIELD_NUMBER: _ClassVar[int]
+    benchmark: Benchmark
+    size: int
+    device_index: int
+    repeats: int
+    def __init__(self, benchmark: _Optional[_Union[Benchmark, str]] = ..., size: _Optional[int] = ..., device_index: _Optional[int] = ..., repeats: _Optional[int] = ...) -> None: ...
+
+class BenchmarkResponse(_message.Message):
+    __slots__ = ("benchmark", "size", "device_index", "repeats", "best_ms", "mean_ms", "bandwidth_gb_s", "peak_bandwidth_gb_s", "gflops", "pi_estimate")
+    BENCHMARK_FIELD_NUMBER: _ClassVar[int]
+    SIZE_FIELD_NUMBER: _ClassVar[int]
+    DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
+    REPEATS_FIELD_NUMBER: _ClassVar[int]
+    BEST_MS_FIELD_NUMBER: _ClassVar[int]
+    MEAN_MS_FIELD_NUMBER: _ClassVar[int]
+    BANDWIDTH_GB_S_FIELD_NUMBER: _ClassVar[int]
+    PEAK_BANDWIDTH_GB_S_FIELD_NUMBER: _ClassVar[int]
+    GFLOPS_FIELD_NUMBER: _ClassVar[int]
+    PI_ESTIMATE_FIELD_NUMBER: _ClassVar[int]
+    benchmark: Benchmark
+    size: int
+    device_index: int
+    repeats: int
+    best_ms: float
+    mean_ms: float
+    bandwidth_gb_s: float
+    peak_bandwidth_gb_s: float
+    gflops: float
+    pi_estimate: float
+    def __init__(self, benchmark: _Optional[_Union[Benchmark, str]] = ..., size: _Optional[int] = ..., device_index: _Optional[int] = ..., repeats: _Optional[int] = ..., best_ms: _Optional[float] = ..., mean_ms: _Optional[float] = ..., bandwidth_gb_s: _Optional[float] = ..., peak_bandwidth_gb_s: _Optional[float] = ..., gflops: _Optional[float] = ..., pi_estimate: _Optional[float] = ...) -> None: ...

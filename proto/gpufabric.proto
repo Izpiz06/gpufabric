@@ -12,6 +12,8 @@ service GPUFabricService {
   rpc Compute(ComputeRequest) returns (ComputeResponse);
   // List every GPU on the worker with its specs and live status.
   rpc ListGPUs(ListGPUsRequest) returns (ListGPUsResponse);
+  // Run a benchmark on data generated directly on the worker GPU.
+  rpc RunBenchmark(BenchmarkRequest) returns (BenchmarkResponse);
 }
 
 message HealthRequest {}
@@ -109,6 +111,7 @@ enum Operation {
   OP_VECTOR_DOT = 3;   // c = sum(a * b)       a, b: [n] -> scalar
   OP_MATRIX_ADD = 4;   // C = A + B            A, B: [m, n]
   OP_MATMUL = 5;       // C = A @ B            A: [m, k], B: [k, n] -> [m, n]
+  OP_TRIAD = 6;        // a = b + s * c        b, c: [n], s: scalar
 }
 
 message ComputeRequest {
@@ -149,4 +152,39 @@ message ListGPUsResponse {
   // see GPUs even when CuPy is missing, so this is reported separately.
   bool compute_ready = 4;
   repeated GPUDevice gpus = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Benchmarks
+// ---------------------------------------------------------------------------
+
+enum Benchmark {
+  BENCHMARK_UNSPECIFIED = 0;
+  // STREAM triad a = b + s * c on float32 vectors of `size` elements.
+  // Measures GPU memory bandwidth (3 * size * 4 bytes per run).
+  BENCH_TRIAD = 1;
+  // `size` x `size` float32 matrix multiply. Measures compute (2 * size^3 FLOPs).
+  BENCH_MATMUL = 2;
+  // Estimate pi from `size` random points per run in the unit square.
+  BENCH_MONTE_CARLO_PI = 3;
+}
+
+message BenchmarkRequest {
+  Benchmark benchmark = 1;
+  int64 size = 2;
+  int32 device_index = 3;
+  int32 repeats = 4;  // timed runs after one warm-up run; 0 means 5
+}
+
+message BenchmarkResponse {
+  Benchmark benchmark = 1;
+  int64 size = 2;
+  int32 device_index = 3;
+  int32 repeats = 4;
+  double best_ms = 5;              // fastest run, CUDA event timing
+  double mean_ms = 6;
+  double bandwidth_gb_s = 7;       // triad: bytes moved / best time (1 GB = 1e9 bytes)
+  double peak_bandwidth_gb_s = 8;  // triad: theoretical peak from NVML; 0 if unknown
+  double gflops = 9;               // matmul: 2 * size^3 / best time
+  double pi_estimate = 10;         // monte carlo: over size * repeats points
 }
