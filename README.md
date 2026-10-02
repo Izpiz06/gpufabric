@@ -134,6 +134,7 @@ python -m worker --host 0.0.0.0 --port 50051
 * `--worker-id`: Custom name/tag for the worker node
 * `--log-level`: `debug`, `info`, `warning`, `error`
 * `--max-message-mb`: Max gRPC message size in MiB (default: `256`, max: `2047`). The client CLI accepts the same flag; set both sides when sending larger payloads.
+* `--no-warmup`: Skip the warm-up kernel that runs on every GPU at startup to absorb the one-time CUDA initialization cost
 
 ---
 

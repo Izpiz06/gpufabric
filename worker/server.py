@@ -22,11 +22,14 @@ def create_grpc_server(
     worker_id: Optional[str] = None,
     max_workers: int = 10,
     max_message_mb: int = DEFAULT_MAX_MESSAGE_MB,
+    warmup: bool = True,
 ) -> grpc.Server:
     """Instantiate and configure the gRPC server."""
     state = WorkerState(worker_id=worker_id)
     gpu_mgr = GPUManager()
     executor = GPUExecutor()
+    if warmup:
+        executor.warmup()
 
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
@@ -58,6 +61,9 @@ def parse_args():
         default=DEFAULT_MAX_MESSAGE_MB,
         help=f"Max gRPC message size in MiB (default: {DEFAULT_MAX_MESSAGE_MB})",
     )
+    parser.add_argument(
+        "--no-warmup", action="store_true", help="Skip the GPU warm-up kernel at startup"
+    )
     args = parser.parse_args()
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
@@ -74,6 +80,7 @@ def run_worker():
     server = create_grpc_server(
         worker_id=args.worker_id,
         max_message_mb=args.max_message_mb,
+        warmup=not args.no_warmup,
     )
     server.add_insecure_port(bind_address)
     logger.info(f"GPU Fabric gRPC worker running on {bind_address}")

@@ -17,13 +17,16 @@ class GPUExecutor:
     """Executes computational workloads directly on NVIDIA GPUs."""
 
     def __init__(self):
+        self.device_count = 0
         self.backend = self._detect_backend()
 
     def _detect_backend(self) -> str:
         try:
             import cupy as cp
 
-            if cp.cuda.runtime.getDeviceCount() > 0:
+            count = cp.cuda.runtime.getDeviceCount()
+            if count > 0:
+                self.device_count = count
                 return "cupy"
         except Exception:
             pass
@@ -32,7 +35,9 @@ class GPUExecutor:
             import pycuda.driver as cuda
 
             cuda.init()
-            if cuda.Device.count() > 0:
+            count = cuda.Device.count()
+            if count > 0:
+                self.device_count = count
                 return "pycuda"
         except Exception:
             pass
@@ -41,16 +46,35 @@ class GPUExecutor:
             import torch
 
             if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+                self.device_count = torch.cuda.device_count()
                 return "torch_cuda"
         except Exception:
             pass
 
+        self.device_count = 0
         return "none"
 
     def is_gpu_ready(self) -> bool:
         if self.backend == "none":
             self.backend = self._detect_backend()
         return self.backend != "none"
+
+    def warmup(self) -> None:
+        """Run a tiny kernel on every GPU to absorb the one-time cold start.
+
+        The first GPU call pays for CUDA context creation and kernel
+        compilation (~250 ms on an RTX 3050). Doing it at startup keeps that
+        cost out of the first client request. Failures are logged, never raised.
+        """
+        if not self.is_gpu_ready():
+            logger.info("GPU warm-up skipped: no GPU backend available")
+            return
+        for device_index in range(self.device_count):
+            try:
+                _, elapsed_ms, _ = self.execute_vector_add([1.0], [1.0], device_index)
+                logger.info(f"GPU {device_index} warm-up done ({elapsed_ms:.1f} ms)")
+            except Exception as e:
+                logger.warning(f"GPU {device_index} warm-up failed: {e}")
 
     def execute_vector_add(
         self, a: List[float], b: List[float], device_index: int = 0
