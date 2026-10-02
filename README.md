@@ -51,7 +51,7 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 * 🚀 **gRPC & Protocol Buffers**: High-speed, strongly typed binary RPC protocol.
 * 🔍 **Zero-Friction Discovery**: Connect to any worker over LAN to inspect hardware specs and cluster readiness.
 * 📊 **Live NVML Telemetry**: Real-time VRAM allocation, GPU core utilization, memory controller load, and temperatures via NVIDIA NVML.
-* ⚡ **Physical GPU Kernel Execution**: Workloads execute directly on physical GPU memory via **CuPy**, **PyCUDA**, or **PyTorch CUDA** (no CPU fallback).
+* ⚡ **Physical GPU Kernel Execution**: Workloads execute directly on physical GPU memory via **CuPy** (no CPU fallback).
 * 🖥️ **Rich Interactive CLI**: Built-in formatted terminal user interface with status indicators, tables, and execution metrics.
 * 🧩 **Modular & Clean Architecture**: Codebase is split into single-responsibility, maintainable sub-modules.
 
@@ -73,7 +73,7 @@ flowchart LR
     subgraph WorkerMachine["🖥️ Machine B (GPU Worker Node)"]
         Server["gRPC Server (:50051)\n(GPUFabricServiceServicer)"]
         NVML["GPU Manager\n(pynvml / NVML)"]
-        Executor["GPU Executor\n(CuPy / PyCUDA / CUDA)"]
+        Executor["GPU Executor\n(CuPy)"]
         GPU[("⚡ NVIDIA GPU\nRTX 3080/4090/A100")]
 
         Server --> NVML
@@ -102,18 +102,15 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-### 2. Install GPU Backend (On Worker Machine)
-Install your preferred CUDA backend matching your NVIDIA driver:
+### 2. Install CuPy (On Worker Machine)
+The worker runs GPU work through [CuPy](https://cupy.dev). Install the build matching your driver's CUDA major version:
 
 ```bash
-# Recommended: CuPy for CUDA 12.x
+# CUDA 12.x drivers
 pip install cupy-cuda12x
 
-# Or CuPy for CUDA 11.x
+# CUDA 11.x drivers
 pip install cupy-cuda11x
-
-# Or PyCUDA
-pip install pycuda
 ```
 
 ---

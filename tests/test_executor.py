@@ -22,7 +22,6 @@ def test_executor_no_gpu():
 
 def test_executor_cupy_mock():
     executor = GPUExecutor()
-    executor.backend = "cupy"
 
     mock_cp = MagicMock()
     mock_cp.cuda.Device.return_value.__enter__.return_value = None

@@ -69,13 +69,13 @@ def test_client_gpu_info(grpc_server):
 def test_client_execute_vector_add(grpc_server):
     port, _, _, executor = grpc_server
     with patch.object(
-        executor, "execute_vector_add", return_value=([10.0, 20.0], 0.18, "torch_cuda")
+        executor, "execute_vector_add", return_value=([10.0, 20.0], 0.18, "cupy")
     ):
         with GPUFabricClient(host="127.0.0.1", port=port) as client:
             resp = client.execute_vector_add(a=[1.0, 2.0], b=[9.0, 18.0])
             assert resp.status == "success"
             assert list(resp.result) == [10.0, 20.0]
-            assert resp.gpu_backend == "torch_cuda"
+            assert resp.gpu_backend == "cupy"
 
 
 def test_client_execute_payload_above_grpc_default_limit(grpc_server):
