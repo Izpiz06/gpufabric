@@ -7,16 +7,28 @@ import grpc
 from common.constants import API_VERSION
 from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
+    ComputeResponse,
     ExecuteResponse,
     GPUInfoResponse,
     GPUStatusResponse,
     HealthResponse,
+    Operation,
     WorkloadType,
 )
 from common.gpufabric_pb2_grpc import GPUFabricServiceServicer
-from worker.executor import GPUExecutionError, GPUExecutor
+from common.tensor import TensorError, from_tensor, to_tensor
+from worker.executor import GPUExecutionError, GPUExecutor, GPUOutOfMemoryError
 from worker.gpu import GPUManager
 from worker.state import WorkerState
+
+# Protobuf Operation enum -> executor operation name.
+_OPERATIONS = {
+    Operation.OP_VECTOR_ADD: "vector_add",
+    Operation.OP_VECTOR_MUL: "vector_mul",
+    Operation.OP_VECTOR_DOT: "vector_dot",
+    Operation.OP_MATRIX_ADD: "matrix_add",
+    Operation.OP_MATMUL: "matmul",
+}
 
 
 class GPUFabricServicer(GPUFabricServiceServicer):
@@ -117,3 +129,35 @@ class GPUFabricServicer(GPUFabricServiceServicer):
             context.abort(grpc.StatusCode.INTERNAL, f"Workload execution failed: {e}")
         finally:
             self.state.decrement_tasks()
+
+    def Compute(self, request, context) -> ComputeResponse:
+        op = _OPERATIONS.get(request.op)
+        if op is None:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"Unsupported operation: {request.op}")
+        try:
+            inputs = [from_tensor(t) for t in request.inputs]
+        except TensorError as e:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+
+        task_id = str(uuid.uuid4())
+        self.state.increment_tasks()
+        try:
+            result, gpu_ms, total_ms = self.executor.compute(op, inputs, request.device_index)
+        except ValueError as e:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+        except GPUOutOfMemoryError as e:
+            context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, f"GPU out of memory: {e}")
+        except GPUExecutionError as e:
+            context.abort(grpc.StatusCode.UNAVAILABLE, str(e))
+        except Exception as e:
+            context.abort(grpc.StatusCode.INTERNAL, f"Compute failed: {e}")
+        finally:
+            self.state.decrement_tasks()
+
+        return ComputeResponse(
+            task_id=task_id,
+            result=to_tensor(result),
+            gpu_time_ms=gpu_ms,
+            total_time_ms=total_ms,
+            device_index=request.device_index,
+        )

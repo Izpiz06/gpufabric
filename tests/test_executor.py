@@ -2,9 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
-from worker.executor import GPUExecutionError, GPUExecutor
+from worker.executor import GPUExecutionError, GPUExecutor, validate_inputs
 
 
 def test_executor_validation():
@@ -54,3 +55,52 @@ def test_warmup_runs_each_device_and_survives_failures():
         ) as run:
             executor.warmup()
             assert [c.args[2] for c in run.call_args_list] == [0, 1]
+
+
+def _f32(*shape):
+    return np.zeros(shape, dtype=np.float32)
+
+
+@pytest.mark.parametrize(
+    "op, inputs, message",
+    [
+        ("transpose", [_f32(2), _f32(2)], "Unsupported operation"),
+        ("vector_add", [_f32(2)], "takes 2 inputs"),
+        ("vector_add", [_f32(2), np.zeros(2, dtype=np.float64)], "share a dtype"),
+        ("vector_mul", [_f32(2, 2), _f32(2, 2)], "1-D vectors"),
+        ("vector_dot", [_f32(2), _f32(3)], "size mismatch"),
+        ("matrix_add", [_f32(2), _f32(2)], "2-D matrices"),
+        ("matrix_add", [_f32(2, 3), _f32(3, 2)], "shape mismatch"),
+        ("matmul", [_f32(2, 3), _f32(2, 3)], "inner dimensions"),
+    ],
+)
+def test_validate_inputs_rejects(op, inputs, message):
+    with pytest.raises(ValueError, match=message):
+        validate_inputs(op, inputs)
+
+
+@pytest.mark.parametrize(
+    "op, inputs",
+    [
+        ("vector_add", [_f32(5), _f32(5)]),
+        ("vector_dot", [_f32(5), _f32(5)]),
+        ("matrix_add", [_f32(2, 3), _f32(2, 3)]),
+        ("matmul", [_f32(2, 3), _f32(3, 4)]),
+    ],
+)
+def test_validate_inputs_accepts(op, inputs):
+    validate_inputs(op, inputs)
+
+
+def test_compute_rejects_out_of_range_device():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    with pytest.raises(ValueError, match="Invalid device_index 3"):
+        executor.compute("vector_add", [_f32(2), _f32(2)], device_index=3)
+
+
+def test_compute_without_gpu():
+    executor = GPUExecutor()
+    with patch.object(executor, "is_gpu_ready", return_value=False):
+        with pytest.raises(GPUExecutionError):
+            executor.compute("vector_add", [_f32(2), _f32(2)])
