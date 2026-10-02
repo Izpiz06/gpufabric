@@ -132,3 +132,12 @@ def test_resolve_workers(monkeypatch):
     assert resolve_workers(["10.0.0.9"]) == ["10.0.0.9"]
     monkeypatch.delenv("GPUFABRIC_WORKERS")
     assert resolve_workers([]) == []
+
+
+def test_client_error_keeps_status_code(grpc_server):
+    port, _, _, _ = grpc_server
+    with GPUFabricClient(host="127.0.0.1", port=port) as client:
+        with pytest.raises(GPUFabricError) as exc:
+            client.matmul(np.ones((2, 3), np.float32), np.ones((2, 3), np.float32))
+    assert exc.value.code == grpc.StatusCode.INVALID_ARGUMENT
+    assert isinstance(exc.value.__cause__, grpc.RpcError)

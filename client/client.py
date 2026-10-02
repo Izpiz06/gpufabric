@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import grpc
 import numpy as np
@@ -37,9 +37,20 @@ OPERATIONS = {
 
 
 class GPUFabricError(Exception):
-    """Base exception for GPU Fabric client errors."""
+    """Base exception for GPU Fabric client errors.
 
-    pass
+    `code` is the gRPC status code when the error came from an RPC, so
+    callers can tell "retry later" (UNAVAILABLE) from "fix the request"
+    (INVALID_ARGUMENT) or "too big for the GPU" (RESOURCE_EXHAUSTED).
+    """
+
+    def __init__(self, message: str, code: Optional[grpc.StatusCode] = None):
+        super().__init__(message)
+        self.code = code
+
+
+def _rpc_error(prefix: str, e: grpc.RpcError) -> GPUFabricError:
+    return GPUFabricError(f"{prefix}: {e.details() or e.code()}", code=e.code())
 
 
 @dataclass
@@ -89,7 +100,7 @@ class GPUFabricClient:
         try:
             return self._stub.GetHealth(HealthRequest(), timeout=self.timeout)
         except grpc.RpcError as e:
-            raise GPUFabricError(f"Health check failed on {self.target}: {e.details() or e.code()}")
+            raise _rpc_error(f"Health check failed on {self.target}", e) from e
 
     def discover(self) -> HealthResponse:
         return self.health()
@@ -99,21 +110,21 @@ class GPUFabricClient:
             req = GPUInfoRequest(device_index=device_index)
             return self._stub.GetGPUInfo(req, timeout=self.timeout)
         except grpc.RpcError as e:
-            raise GPUFabricError(f"Failed to fetch GPU info: {e.details() or e.code()}")
+            raise _rpc_error("Failed to fetch GPU info", e) from e
 
     def get_status(self, device_index: int = 0) -> GPUStatusResponse:
         try:
             req = GPUStatusRequest(device_index=device_index)
             return self._stub.GetGPUStatus(req, timeout=self.timeout)
         except grpc.RpcError as e:
-            raise GPUFabricError(f"Failed to fetch GPU status: {e.details() or e.code()}")
+            raise _rpc_error("Failed to fetch GPU status", e) from e
 
     def list_gpus(self) -> ListGPUsResponse:
         """Every GPU on the worker with specs and live status."""
         try:
             return self._stub.ListGPUs(ListGPUsRequest(), timeout=self.timeout)
         except grpc.RpcError as e:
-            raise GPUFabricError(f"Failed to list GPUs on {self.target}: {e.details() or e.code()}")
+            raise _rpc_error(f"Failed to list GPUs on {self.target}", e) from e
 
     def execute_vector_add(
         self, a: List[float], b: List[float], device_index: int = 0
@@ -127,7 +138,7 @@ class GPUFabricClient:
             )
             return self._stub.Execute(req, timeout=self.timeout)
         except grpc.RpcError as e:
-            raise GPUFabricError(f"Execution failed on GPU: {e.details() or e.code()}")
+            raise _rpc_error(f"Execute failed on {self.target}", e) from e
 
     def compute(self, op: str, *inputs, device_index: int = 0) -> ComputeResult:
         """Run an operation on the worker GPU.
@@ -146,7 +157,7 @@ class GPUFabricClient:
         try:
             resp = self._stub.Compute(req, timeout=self.timeout)
         except grpc.RpcError as e:
-            raise GPUFabricError(f"Compute {op} failed: {e.details() or e.code()}")
+            raise _rpc_error(f"Compute {op} failed", e) from e
         round_trip_ms = (time.perf_counter() - t0) * 1000.0
         return ComputeResult(
             result=from_tensor(resp.result),
