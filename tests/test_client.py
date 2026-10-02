@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 
 from client.client import GPUFabricClient, GPUFabricError
-from common.constants import DEFAULT_MAX_MESSAGE_MB
+from client.commands import collect_inventory, resolve_workers
+from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT
 from common.gpufabric_pb2_grpc import add_GPUFabricServiceServicer_to_server
 from common.grpc_options import message_size_options
 from worker.executor import GPUExecutor
@@ -114,3 +115,20 @@ def test_client_compute_unknown_operation():
     with GPUFabricClient(host="127.0.0.1", port=1) as client:
         with pytest.raises(ValueError, match="Unknown operation"):
             client.compute("transpose", np.ones(2))
+
+
+def test_collect_inventory_mixes_live_and_dead_workers(grpc_server, monkeypatch):
+    port, _, gpu, _ = grpc_server
+    with patch.object(gpu, "list_devices", return_value=[]):
+        rows = collect_inventory([f"127.0.0.1:{port}", "127.0.0.1:1"], DEFAULT_PORT, 2.0, 16)
+    assert rows[0][0] == f"127.0.0.1:{port}"
+    assert rows[0][1].worker_id == "test-worker-e2e"
+    assert isinstance(rows[1][1], str) and "127.0.0.1:1" in rows[1][1]
+
+
+def test_resolve_workers(monkeypatch):
+    monkeypatch.setenv("GPUFABRIC_WORKERS", "10.0.0.1, 10.0.0.2:6000,")
+    assert resolve_workers([]) == ["10.0.0.1", "10.0.0.2:6000"]
+    assert resolve_workers(["10.0.0.9"]) == ["10.0.0.9"]
+    monkeypatch.delenv("GPUFABRIC_WORKERS")
+    assert resolve_workers([]) == []

@@ -142,6 +142,16 @@ python -m worker --host 0.0.0.0 --port 50051
 
 From another machine on the LAN (e.g., your laptop):
 
+#### 🗂️ List Every GPU on Your Workers
+```bash
+python -m client ls 192.168.1.50 192.168.1.51:6000
+
+# Or save your workers once:
+export GPUFABRIC_WORKERS=192.168.1.50,192.168.1.51:6000
+python -m client ls
+```
+Shows each worker's GPUs with free/total VRAM, utilization, temperature, compute capability, and whether the worker can run compute jobs. Unreachable workers are listed as such instead of failing the whole command.
+
 #### 📡 Discover & Ping Worker
 ```bash
 python -m client discover 192.168.1.50
@@ -286,6 +296,7 @@ service GPUFabricService {
   rpc GetGPUStatus(GPUStatusRequest) returns (GPUStatusResponse);
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
   rpc Compute(ComputeRequest) returns (ComputeResponse);
+  rpc ListGPUs(ListGPUsRequest) returns (ListGPUsResponse);
 }
 ```
 

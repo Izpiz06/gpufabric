@@ -68,3 +68,12 @@ def test_invalid_device_is_rejected(client):
     a = np.ones(4, dtype=np.float32)
     with pytest.raises(GPUFabricError, match="Invalid device_index"):
         client.vector_add(a, a, device_index=999)
+
+
+def test_list_gpus_shows_device(client):
+    inv = client.list_gpus()
+    assert inv.compute_ready
+    assert DEVICE in [g.device_index for g in inv.gpus]
+    gpu = next(g for g in inv.gpus if g.device_index == DEVICE)
+    assert gpu.name
+    assert 0 < gpu.free_vram_bytes <= gpu.total_vram_bytes

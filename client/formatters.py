@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
     ExecuteResponse,
     GPUInfoResponse,
@@ -87,4 +88,31 @@ def print_compute(op: str, res, rel_error: float, verified: bool):
         "Verified vs numpy",
         "[green]PASS[/green]" if verified else "[red]FAIL[/red]",
     )
+    console.print(t)
+
+
+def print_inventory(rows):
+    """rows: list of (worker address, ListGPUsResponse or error string)."""
+    t = Table(title="GPU Inventory")
+    for col in ("Worker", "GPU", "Name", "VRAM free / total", "Util", "Temp", "CC", "Compute"):
+        t.add_column(col)
+    for target, result in rows:
+        if isinstance(result, str):
+            t.add_row(target, "-", f"[red]unreachable[/red] {result}", "", "", "", "", "")
+            continue
+        label = f"{target}\n[dim]{result.worker_id}[/dim]"
+        compute = "[green]ready[/green]" if result.compute_ready else "[red]no CuPy[/red]"
+        if not result.gpus:
+            t.add_row(label, "-", "[yellow]no GPUs found[/yellow]", "", "", "", "", compute)
+        for gpu in result.gpus:
+            t.add_row(
+                label,
+                str(gpu.device_index),
+                gpu.name,
+                f"{bytes_to_human(gpu.free_vram_bytes)} / {bytes_to_human(gpu.total_vram_bytes)}",
+                f"{gpu.gpu_utilization_pct}%",
+                f"{gpu.temperature_c} °C",
+                gpu.compute_capability or "N/A",
+                compute,
+            )
     console.print(t)

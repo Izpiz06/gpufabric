@@ -9,9 +9,11 @@ from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
     ComputeResponse,
     ExecuteResponse,
+    GPUDevice,
     GPUInfoResponse,
     GPUStatusResponse,
     HealthResponse,
+    ListGPUsResponse,
     Operation,
     WorkloadType,
 )
@@ -160,4 +162,28 @@ class GPUFabricServicer(GPUFabricServiceServicer):
             gpu_time_ms=gpu_ms,
             total_time_ms=total_ms,
             device_index=request.device_index,
+        )
+
+    def ListGPUs(self, request, context) -> ListGPUsResponse:
+        try:
+            devices = self.gpu.list_devices()
+        except Exception as e:
+            context.abort(grpc.StatusCode.INTERNAL, f"Failed to query GPUs: {e}")
+        return ListGPUsResponse(
+            worker_id=self.state.worker_id,
+            version=API_VERSION,
+            driver_version=devices[0]["driver_version"] if devices else "",
+            compute_ready=self.executor.is_gpu_ready(),
+            gpus=[
+                GPUDevice(
+                    device_index=d["device_index"],
+                    name=d["name"],
+                    total_vram_bytes=d["total_vram"],
+                    free_vram_bytes=d["free_vram"],
+                    compute_capability=d["compute_capability"],
+                    gpu_utilization_pct=d["gpu_util"],
+                    temperature_c=d["temp"],
+                )
+                for d in devices
+            ],
         )

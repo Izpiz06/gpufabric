@@ -2,7 +2,7 @@
 
 import logging
 import warnings
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 logger = logging.getLogger("gpufabric.worker.gpu")
 
@@ -47,6 +47,16 @@ class GPUManager:
             return pynvml.nvmlDeviceGetCount() > 0
         except Exception:
             return False
+
+    def device_count(self) -> int:
+        """Number of GPUs NVML can see (0 if NVML is unavailable)."""
+        if not self.is_available():
+            return 0
+        return pynvml.nvmlDeviceGetCount()
+
+    def list_devices(self) -> List[Dict[str, Any]]:
+        """Specs and live status for every GPU, merged into one dict per device."""
+        return [{**self.get_info(i), **self.get_status(i)} for i in range(self.device_count())]
 
     def get_info(self, device_index: int = 0) -> Dict[str, Any]:
         """Fetch static GPU device specs."""

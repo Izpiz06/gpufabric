@@ -12,6 +12,7 @@ from common.gpufabric_pb2 import (
     ExecuteRequest,
     GPUInfoRequest,
     HealthRequest,
+    ListGPUsRequest,
     Operation,
     Tensor,
     WorkloadType,
@@ -146,3 +147,38 @@ def test_service_compute_error_mapping(error, code):
             servicer.Compute(_vector_request(), _context())
     assert exc.value.code == code
     assert servicer.state.active_tasks == 0
+
+
+def test_service_list_gpus():
+    servicer = _servicer()
+    device = {
+        "device_index": 0,
+        "name": "NVIDIA RTX 3050",
+        "total_vram": 4 * 1024**3,
+        "free_vram": 3 * 1024**3,
+        "used_vram": 1024**3,
+        "compute_capability": "8.6",
+        "driver_version": "610.57.04",
+        "gpu_util": 5,
+        "mem_util": 2,
+        "temp": 52,
+    }
+    with (
+        patch.object(servicer.gpu, "list_devices", return_value=[device]),
+        patch.object(servicer.executor, "is_gpu_ready", return_value=False),
+    ):
+        resp = servicer.ListGPUs(ListGPUsRequest(), _context())
+    assert resp.worker_id == "worker-node-1"
+    assert resp.driver_version == "610.57.04"
+    assert resp.compute_ready is False
+    assert len(resp.gpus) == 1
+    assert resp.gpus[0].name == "NVIDIA RTX 3050"
+    assert resp.gpus[0].free_vram_bytes == 3 * 1024**3
+
+
+def test_service_list_gpus_without_gpus():
+    servicer = _servicer()
+    with patch.object(servicer.gpu, "list_devices", return_value=[]):
+        resp = servicer.ListGPUs(ListGPUsRequest(), _context())
+    assert list(resp.gpus) == []
+    assert resp.driver_version == ""

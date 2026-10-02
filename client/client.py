@@ -18,6 +18,8 @@ from common.gpufabric_pb2 import (
     GPUStatusResponse,
     HealthRequest,
     HealthResponse,
+    ListGPUsRequest,
+    ListGPUsResponse,
     Operation,
     WorkloadType,
 )
@@ -105,6 +107,13 @@ class GPUFabricClient:
             return self._stub.GetGPUStatus(req, timeout=self.timeout)
         except grpc.RpcError as e:
             raise GPUFabricError(f"Failed to fetch GPU status: {e.details() or e.code()}")
+
+    def list_gpus(self) -> ListGPUsResponse:
+        """Every GPU on the worker with specs and live status."""
+        try:
+            return self._stub.ListGPUs(ListGPUsRequest(), timeout=self.timeout)
+        except grpc.RpcError as e:
+            raise GPUFabricError(f"Failed to list GPUs on {self.target}: {e.details() or e.code()}")
 
     def execute_vector_add(
         self, a: List[float], b: List[float], device_index: int = 0

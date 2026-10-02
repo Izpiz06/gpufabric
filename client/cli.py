@@ -4,7 +4,15 @@ import argparse
 import sys
 
 from client.client import OPERATIONS, GPUFabricClient, GPUFabricError
-from client.commands import cmd_compute, cmd_discover, cmd_execute, cmd_gpu, cmd_status
+from client.commands import (
+    WORKERS_ENV,
+    cmd_compute,
+    cmd_discover,
+    cmd_execute,
+    cmd_gpu,
+    cmd_ls,
+    cmd_status,
+)
 from client.formatters import console
 from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
 
@@ -23,6 +31,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     sub = p.add_subparsers(dest="command", help="Command")
+
+    p_ls = sub.add_parser("ls", help="List every GPU on one or more workers")
+    p_ls.add_argument(
+        "workers",
+        nargs="*",
+        help=f"Worker addresses (host or host:port). Defaults to ${WORKERS_ENV} (comma-separated)",
+    )
 
     p_disc = sub.add_parser("discover", help="Discover worker")
     p_disc.add_argument("worker_ip", type=str, help="IP or hostname of worker")
@@ -66,6 +81,10 @@ def main():
         sys.exit(0)
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
+
+    if args.command == "ls":
+        cmd_ls(args)
+        return
 
     with GPUFabricClient(
         host=args.worker_ip,
