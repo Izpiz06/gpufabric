@@ -1,4 +1,5 @@
 """Benchmark checks: run benchmarks on a worker and judge them pass/fail."""
+
 import math
 import statistics
 from dataclasses import dataclass

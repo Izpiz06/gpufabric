@@ -3,7 +3,7 @@
 import os
 import random
 import sys
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -13,6 +13,7 @@ from client.formatters import (
     console,
     print_bench_report,
     print_compute,
+    print_discovered_workers,
     print_execution,
     print_gpu_info,
     print_health,
@@ -20,15 +21,32 @@ from client.formatters import (
     print_status,
 )
 from client.verify import REFERENCE, relative_error, tolerance
+from common.constants import DEFAULT_DISCOVERY_TIMEOUT
 from common.gpufabric_pb2 import ListGPUsResponse
 
 WORKERS_ENV = "GPUFABRIC_WORKERS"
 
 
-def cmd_discover(client: GPUFabricClient, args):
+def cmd_discover_explicit(client: GPUFabricClient, args):
     with console.status("[bold green]Connecting to worker..."):
         info = client.discover()
     print_health(client.target, info)
+
+
+def cmd_discover_lan(args, client_kwargs=None):
+    timeout = getattr(args, "timeout", None) or DEFAULT_DISCOVERY_TIMEOUT
+    with console.status(
+        f"[bold green]Searching for GPU Fabric workers on LAN (timeout {timeout:.1f}s)..."
+    ):
+        workers = GPUFabricClient.discover_lan(timeout=timeout, client_kwargs=client_kwargs)
+    print_discovered_workers(workers, timeout=timeout)
+
+
+def cmd_discover(client: Optional[GPUFabricClient], args, client_kwargs=None):
+    if client is not None:
+        cmd_discover_explicit(client, args)
+    else:
+        cmd_discover_lan(args, client_kwargs=client_kwargs)
 
 
 def cmd_gpu(client: GPUFabricClient, args):

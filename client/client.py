@@ -3,12 +3,15 @@
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
 
 import grpc
 import numpy as np
 
-from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT
+from common.constants import DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT
+
+if TYPE_CHECKING:
+    from common.discovery import DiscoveredWorker
 from common.gpufabric_pb2 import (
     Benchmark,
     BenchmarkRequest,
@@ -127,6 +130,56 @@ class GPUFabricClient:
 
     def discover(self) -> HealthResponse:
         return self.health()
+
+    @classmethod
+    def discover_lan(
+        cls,
+        timeout: float = DEFAULT_DISCOVERY_TIMEOUT,
+        client_kwargs: Optional[dict] = None,
+        _client_factory: Optional[Any] = None,
+    ) -> List["DiscoveredWorker"]:
+        """Discover GPU Fabric workers on the local network via mDNS and verify them via gRPC."""
+        from common.discovery import DiscoveredWorker, browse_lan_candidates
+
+        candidates = browse_lan_candidates(timeout=timeout)
+        kwargs = dict(client_kwargs or {})
+        factory = _client_factory or cls
+
+        results: List[DiscoveredWorker] = []
+        for cand in candidates:
+            addr = cand.primary_address
+            port = cand.port
+            worker_client_kwargs = dict(kwargs)
+            worker_client_kwargs.pop("port", None)
+
+            try:
+                with factory(host=addr, port=port, **worker_client_kwargs) as client:
+                    health = client.health()
+                    results.append(
+                        DiscoveredWorker(
+                            name=cand.name,
+                            address=addr,
+                            port=port,
+                            worker_id=health.worker_id or cand.worker_id,
+                            version=health.version,
+                            status="ONLINE" if health.status == "ok" else health.status.upper(),
+                            gpu_available=health.gpu_available,
+                        )
+                    )
+            except Exception as e:
+                results.append(
+                    DiscoveredWorker(
+                        name=cand.name,
+                        address=addr,
+                        port=port,
+                        worker_id=cand.worker_id,
+                        version=cand.properties.get("version", ""),
+                        status="UNREACHABLE",
+                        error=str(e),
+                    )
+                )
+
+        return results
 
     def get_gpu_info(self, device_index: int = 0) -> GPUInfoResponse:
         try:

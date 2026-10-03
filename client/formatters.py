@@ -25,6 +25,33 @@ def print_health(target: str, info: HealthResponse):
     console.print(Panel(content, title=f"Worker @ {target}", expand=False))
 
 
+def print_discovered_workers(workers, timeout: float = 3.0):
+    """Format and print list of discovered LAN workers."""
+    if not workers:
+        console.print(
+            f"[yellow]No GPU Fabric workers discovered on the local network (timeout: {timeout:.1f}s).[/yellow]\n"
+            "[dim]Tip: Ensure worker machines are running on the same LAN subnet with discovery enabled, "
+            "or specify an address directly (e.g. `gpufabric discover <ip>`).[/dim]"
+        )
+        return
+
+    t = Table(title="GPU Fabric Workers")
+    t.add_column("NAME", style="bold")
+    t.add_column("ADDRESS", style="cyan")
+    t.add_column("PORT", style="magenta")
+    t.add_column("STATUS")
+
+    for w in workers:
+        status_str = (
+            f"[green]{w.status}[/green]" if w.status == "ONLINE" else f"[red]{w.status}[/red]"
+        )
+        if w.status != "ONLINE" and w.error:
+            status_str += f" [dim]({w.error})[/dim]"
+        t.add_row(w.name, w.address, str(w.port), status_str)
+
+    console.print(t)
+
+
 def print_gpu_info(info: GPUInfoResponse):
     t = Table(title=f"GPU Information (Device {info.device_index})")
     t.add_column("Property", style="cyan")

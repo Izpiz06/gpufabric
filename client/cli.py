@@ -55,8 +55,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Worker addresses (host or host:port). Defaults to ${WORKERS_ENV} (comma-separated)",
     )
 
-    p_disc = sub.add_parser("discover", help="Discover worker")
-    p_disc.add_argument("worker_ip", type=str, help="IP or hostname of worker")
+    p_disc = sub.add_parser(
+        "discover", help="Discover workers on local LAN or query specific worker"
+    )
+    p_disc.add_argument(
+        "worker_ip",
+        type=str,
+        nargs="?",
+        default=None,
+        help="Optional IP or hostname of worker (omit to scan LAN automatically)",
+    )
 
     p_gpu = sub.add_parser("gpu", help="Query GPU info")
     p_gpu.add_argument("worker_ip", type=str, help="IP or hostname of worker")
@@ -146,6 +154,9 @@ def main():
     try:
         if args.command == "ls":
             cmd_ls(args, client_kwargs)
+            return
+        if args.command == "discover" and not args.worker_ip:
+            cmd_discover(None, args, client_kwargs=client_kwargs)
             return
         client = GPUFabricClient(host=args.worker_ip, **client_kwargs)
     except GPUFabricError as e:
