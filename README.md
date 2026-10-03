@@ -180,17 +180,35 @@ gpufabric-worker --host 0.0.0.0 --port 50051
 
 ---
 
-### Step 2: Use the Client CLI
+### Step 2: Use the Client Interface (TUI & CLI)
 
-On your client machine (e.g., laptop), use `python -m client` or `gpufabric-client`:
+On your client machine (e.g., laptop), run `gpufabric` to launch the interactive Terminal User Interface (TUI) or use subcommands for scriptable CLI access:
+
+#### 🖥️ Interactive Terminal User Interface (TUI)
+Launch the interactive live dashboard:
+```bash
+gpufabric
+# or: python -m client
+```
+
+**Keybindings & Controls:**
+- `D`: **Discover LAN** - Scan local subnet for active GPU Fabric workers via mDNS and verify health.
+- `R`: **Refresh** - Refresh GPU inventory and metrics for all known workers.
+- `Enter`: **Details** - View comprehensive specifications modal for selected worker and its GPUs.
+- `B`: **Benchmark** - Open interactive benchmark runner (Triad bandwidth, Matmul GFLOPS, Monte Carlo Pi).
+- `Q`: **Quit** - Exit the dashboard.
+
+---
+
+#### 🛠️ CLI Subcommands
 
 #### 1. List All GPUs Across Workers
 ```bash
-python -m client ls 192.168.1.50 192.168.1.51:6000
+gpufabric ls 192.168.1.50 192.168.1.51:6000
 
 # Or configure default workers in your environment:
 export GPUFABRIC_WORKERS=192.168.1.50,192.168.1.51:6000
-python -m client ls
+gpufabric ls
 ```
 
 #### 2. Discover Workers (Automatic LAN Scan & Explicit Address)
