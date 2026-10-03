@@ -1,5 +1,6 @@
 """Tests for mutual TLS certificates and secure connections."""
 
+import os
 import stat
 
 import grpc
@@ -33,8 +34,10 @@ def secure_port(tls_dir):
 def test_init_creates_files_with_private_keys(tls_dir):
     for name in ("ca", "server", "client"):
         assert (tls_dir / f"{name}.crt").is_file()
-        mode = stat.S_IMODE((tls_dir / f"{name}.key").stat().st_mode)
-        assert mode == 0o600
+        assert (tls_dir / f"{name}.key").is_file()
+        if os.name != "nt":
+            mode = stat.S_IMODE((tls_dir / f"{name}.key").stat().st_mode)
+            assert mode == 0o600
 
 
 def test_server_cert_covers_hosts(tls_dir):
