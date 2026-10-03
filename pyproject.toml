@@ -28,6 +28,7 @@ dependencies = [
     "protobuf>=7.35.1,<8",
     "pynvml>=11.5.0",
     "rich>=13.0.0",
+    "zeroconf>=0.130.0",
 ]
 
 [project.optional-dependencies]
