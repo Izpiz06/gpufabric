@@ -4,6 +4,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
     ExecuteResponse,
     GPUInfoResponse,
@@ -69,3 +70,83 @@ def print_execution(resp: ExecuteResponse):
             console.print(
                 f"  [bold green]Result Vector C (first 5 & last 5):[/bold green] {res[:5]} ... {res[-5:]}"
             )
+
+
+def print_compute(op: str, res, rel_error: float, verified: bool):
+    t = Table(title="Compute Result")
+    t.add_column("Property", style="cyan")
+    t.add_column("Value", style="bold")
+    t.add_row("Task ID", res.task_id)
+    t.add_row("Operation", op)
+    t.add_row("Device", str(res.device_index))
+    t.add_row("Result shape", "x".join(map(str, res.result.shape)) or "scalar")
+    t.add_row("GPU kernel time", f"{res.gpu_time_ms:.4f} ms")
+    t.add_row("Worker total time", f"{res.total_time_ms:.4f} ms")
+    t.add_row("Round trip time", f"{res.round_trip_ms:.4f} ms")
+    t.add_row("Max relative error", f"{rel_error:.2e}")
+    t.add_row(
+        "Verified vs numpy",
+        "[green]PASS[/green]" if verified else "[red]FAIL[/red]",
+    )
+    console.print(t)
+
+
+def print_inventory(rows):
+    """rows: list of (worker address, ListGPUsResponse or error string)."""
+    t = Table(title="GPU Inventory")
+    for col in ("Worker", "GPU", "Name", "VRAM free / total", "Util", "Temp", "CC", "Compute"):
+        t.add_column(col)
+    for target, result in rows:
+        if isinstance(result, str):
+            t.add_row(target, "-", f"[red]unreachable[/red] {result}", "", "", "", "", "")
+            continue
+        label = f"{target}\n[dim]{result.worker_id}[/dim]"
+        compute = "[green]ready[/green]" if result.compute_ready else "[red]no CuPy[/red]"
+        if not result.gpus:
+            t.add_row(label, "-", "[yellow]no GPUs found[/yellow]", "", "", "", "", compute)
+        for gpu in result.gpus:
+            t.add_row(
+                label,
+                str(gpu.device_index),
+                gpu.name,
+                f"{bytes_to_human(gpu.free_vram_bytes)} / {bytes_to_human(gpu.total_vram_bytes)}",
+                f"{gpu.gpu_utilization_pct}%",
+                f"{gpu.temperature_c} °C",
+                gpu.compute_capability or "N/A",
+                compute,
+            )
+    console.print(t)
+
+
+_STATUS_STYLE = {"PASS": "green", "FAIL": "red", "INFO": "cyan", "SKIP": "yellow"}
+
+
+def print_bench_report(checks, sweep=None):
+    t = Table(title="Benchmark Report")
+    for col in ("Check", "Result", "Threshold", "Status"):
+        t.add_column(col)
+    for c in checks:
+        style = _STATUS_STYLE.get(c.status, "white")
+        t.add_row(c.name, c.value, c.threshold, f"[bold {style}]{c.status}[/bold {style}]")
+    console.print(t)
+
+    if sweep:
+        st = Table(title="Triad Size Sweep (how much work fits on this GPU)")
+        for col in ("Elements", "GPU memory used", "Bandwidth", "Note"):
+            st.add_column(col)
+        for n, bw, note in sweep:
+            st.add_row(
+                f"{n:,}",
+                bytes_to_human(n * 12),
+                f"{bw:.1f} GB/s" if bw is not None else "-",
+                note,
+            )
+        console.print(st)
+        largest = max((n for n, bw, _ in sweep if bw is not None), default=None)
+        if largest:
+            console.print(
+                f"Largest triad that ran: [bold]{largest:,}[/bold] elements "
+                f"({bytes_to_human(largest * 12)} of GPU memory)"
+            )
+        if sweep[-1][1] is not None:
+            console.print("[dim]Stopped before the next size would exceed 90% of free VRAM.[/dim]")

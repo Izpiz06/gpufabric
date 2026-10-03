@@ -26,6 +26,7 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 - [Architecture](#-architecture)
 - [Installation](#-installation)
 - [Quickstart Guide](#-quickstart-guide)
+  - [0. Create Certificates (Once)](#0-create-certificates-once)
   - [1. Launch Worker (GPU Node)](#1-launch-worker-gpu-node)
   - [2. Use Client CLI (Client Node)](#2-use-client-cli-client-node)
 - [CLI Showcase](#-cli-showcase)
@@ -51,7 +52,8 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 * 🚀 **gRPC & Protocol Buffers**: High-speed, strongly typed binary RPC protocol.
 * 🔍 **Zero-Friction Discovery**: Connect to any worker over LAN to inspect hardware specs and cluster readiness.
 * 📊 **Live NVML Telemetry**: Real-time VRAM allocation, GPU core utilization, memory controller load, and temperatures via NVIDIA NVML.
-* ⚡ **Physical GPU Kernel Execution**: Workloads execute directly on physical GPU memory via **CuPy**, **PyCUDA**, or **PyTorch CUDA** (no CPU fallback).
+* ⚡ **Physical GPU Kernel Execution**: Workloads execute directly on physical GPU memory via **CuPy** (no CPU fallback).
+* 🔐 **Mutual TLS by Default**: Traffic is encrypted and workers only accept clients holding a certificate signed by your CA. One command sets it up.
 * 🖥️ **Rich Interactive CLI**: Built-in formatted terminal user interface with status indicators, tables, and execution metrics.
 * 🧩 **Modular & Clean Architecture**: Codebase is split into single-responsibility, maintainable sub-modules.
 
@@ -73,7 +75,7 @@ flowchart LR
     subgraph WorkerMachine["🖥️ Machine B (GPU Worker Node)"]
         Server["gRPC Server (:50051)\n(GPUFabricServiceServicer)"]
         NVML["GPU Manager\n(pynvml / NVML)"]
-        Executor["GPU Executor\n(CuPy / PyCUDA / CUDA)"]
+        Executor["GPU Executor\n(CuPy)"]
         GPU[("⚡ NVIDIA GPU\nRTX 3080/4090/A100")]
 
         Server --> NVML
@@ -102,23 +104,41 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-### 2. Install GPU Backend (On Worker Machine)
-Install your preferred CUDA backend matching your NVIDIA driver:
+### 2. Install CuPy (On Worker Machine)
+The worker runs GPU work through [CuPy](https://cupy.dev). Install the build matching the CUDA libraries you will use (`nvidia-smi` shows the newest CUDA version your driver supports):
 
 ```bash
-# Recommended: CuPy for CUDA 12.x
-pip install cupy-cuda12x
-
-# Or CuPy for CUDA 11.x
-pip install cupy-cuda11x
-
-# Or PyCUDA
-pip install pycuda
+pip install cupy-cuda12x   # CUDA 12.x
+pip install cupy-cuda13x   # CUDA 13.x
 ```
+
+CuPy also needs the CUDA runtime, NVRTC and cuBLAS libraries of the **same major version**. If the CUDA Toolkit for that version isn't installed system-wide, install them from pip (shown for CUDA 12):
+```bash
+pip install nvidia-cuda-runtime-cu12 nvidia-cuda-nvrtc-cu12 nvidia-cublas-cu12
+```
+Without cuBLAS, element-wise ops work but `vector_dot` and `matmul` fail with `libcublas.so.12: cannot open shared object file`.
 
 ---
 
 ## ⚡ Quickstart Guide
+
+### 0. Create Certificates (Once)
+
+Workers and clients talk over **mutual TLS**: traffic is encrypted, and a worker only accepts clients whose certificate was signed by your CA. On the worker machine, list the IPs/hostnames clients will use to reach it:
+
+```bash
+gpufabric-certs init --hosts 192.168.1.50,gpu-box
+```
+
+This writes a CA, a worker certificate and a client certificate to `~/.config/gpufabric/tls/` (private keys are `chmod 600`). For each client machine, issue a bundle and copy it over:
+
+```bash
+gpufabric-certs add-client laptop
+# copy ~/.config/gpufabric/tls/clients/laptop/{ca.crt,client.crt,client.key}
+# to ~/.config/gpufabric/tls/ on the laptop
+```
+
+Keep `ca.key` private: whoever holds it can authorize new clients. Set `GPUFABRIC_TLS_DIR` or pass `--tls-dir` to use another directory.
 
 ### 1. Launch Worker (GPU Node)
 
@@ -135,12 +155,40 @@ python -m worker --host 0.0.0.0 --port 50051
 * `--log-level`: `debug`, `info`, `warning`, `error`
 * `--max-message-mb`: Max gRPC message size in MiB (default: `256`, max: `2047`). The client CLI accepts the same flag; set both sides when sending larger payloads.
 * `--no-warmup`: Skip the warm-up kernel that runs on every GPU at startup to absorb the one-time CUDA initialization cost
+* `--tls-dir`: Directory with `ca.crt`, `server.crt`, `server.key` (default: `~/.config/gpufabric/tls`). The worker refuses to start if they are missing.
+* `--insecure`: Run without TLS. Traffic is plaintext and any client on the network can use the GPU; use only for local testing.
 
 ---
 
 ### 2. Use Client CLI (Client Node)
 
-From another machine on the LAN (e.g., your laptop):
+From another machine on the LAN (e.g., your laptop). The client reads its certificates from `~/.config/gpufabric/tls` by default; global flags `--tls-dir DIR` and `--insecure` go **before** the sub-command (e.g. `python -m client --insecure ls 192.168.1.50`).
+
+#### 📏 Benchmark a Worker (pass/fail)
+```bash
+python -m client bench 192.168.1.50
+python -m client bench 192.168.1.50 --sweep            # also find the largest workload that fits
+python -m client bench 192.168.1.50 --min-network-mb-s 50 --min-gpu-bw-pct 70
+```
+
+| Check | What it measures | Pass if |
+|---|---|---|
+| Network triad (end-to-end) | Client sends `b`, `c`; the worker GPU computes `a = b + s*c` and returns it. Bytes sent + received / round-trip time. The result is verified against numpy. | median ≥ `--min-network-mb-s` (default **2 MB/s**) |
+| GPU memory bandwidth (triad) | Same triad on data generated on the GPU, with a fused kernel. 3 × n × 4 bytes / kernel time. | ≥ `--min-gpu-bw-pct` (default **50%**) of the theoretical peak from NVML (memory clock × 2 × bus width) |
+| Matmul | 1000×1000 float32 matrix multiply, 2n³ FLOPs / kernel time | reported only |
+| Monte Carlo pi | Fraction of random points inside the unit circle × 4 | within 5σ of π |
+
+`--sweep` doubles the triad size until it would exceed 90% of free VRAM or the GPU runs out of memory, showing how much work the GPU can hold. The command exits with code 1 if any check fails.
+
+#### 🗂️ List Every GPU on Your Workers
+```bash
+python -m client ls 192.168.1.50 192.168.1.51:6000
+
+# Or save your workers once:
+export GPUFABRIC_WORKERS=192.168.1.50,192.168.1.51:6000
+python -m client ls
+```
+Shows each worker's GPUs with free/total VRAM, utilization, temperature, compute capability, and whether the worker can run compute jobs. Unreachable workers are listed as such instead of failing the whole command.
 
 #### 📡 Discover & Ping Worker
 ```bash
@@ -165,6 +213,15 @@ python -m client execute 192.168.1.50 --a 1.0 2.0 3.0 4.0 --b 10.0 20.0 30.0 40.
 # Or benchmark with 1,000,000 elements:
 python -m client execute 192.168.1.50 --size 1000000
 ```
+
+#### 🧮 Run Tensor Operations and Verify Against numpy
+`compute` generates random inputs, runs the operation on the worker GPU, and checks the result against numpy on the client. It exits with code 1 if the result doesn't match.
+
+```bash
+python -m client compute 192.168.1.50 matmul --size 1000          # 1000x1000 @ 1000x1000
+python -m client compute 192.168.1.50 vector_dot --size 1000000 --dtype float64
+```
+Operations: `vector_add`, `vector_mul` (element-wise), `vector_dot`, `matrix_add`, `matmul`, `triad` (`a = b + s*c`). `--size` is the vector length or square matrix size.
 
 ---
 
@@ -224,9 +281,12 @@ Executing Workload: C = A + B (size: 3)
 Use `GPUFabricClient` directly within your Python applications:
 
 ```python
+import numpy as np
+
 from client import GPUFabricClient
 
-# Connect to the remote worker via gRPC
+# Connect over mutual TLS (certificates from ~/.config/gpufabric/tls,
+# or pass tls_dir=...; insecure=True only for a worker run with --insecure)
 with GPUFabricClient(host="192.168.1.50", port=50051) as client:
     # 1. Health check
     health = client.health()
@@ -247,7 +307,15 @@ with GPUFabricClient(host="192.168.1.50", port=50051) as client:
         device_index=0,
     )
     print(f"Output: {list(response.result)}")
-    print(f"Kernel Time: {response.execution_time_ms} ms via {response.gpu_backend}")
+
+    # 5. Tensor operations with numpy arrays
+    a = np.random.rand(1000, 1000).astype(np.float32)
+    res = client.matmul(a, a)  # also: vector_add, vector_mul, vector_dot, matrix_add
+    print(res.result.shape)  # (1000, 1000), a numpy array
+    print(
+        f"Kernel {res.gpu_time_ms:.3f} ms, worker {res.total_time_ms:.3f} ms, "
+        f"round trip {res.round_trip_ms:.3f} ms"
+    )
 ```
 
 ---
@@ -266,6 +334,9 @@ service GPUFabricService {
   rpc GetGPUInfo(GPUInfoRequest) returns (GPUInfoResponse);
   rpc GetGPUStatus(GPUStatusRequest) returns (GPUStatusResponse);
   rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc Compute(ComputeRequest) returns (ComputeResponse);
+  rpc ListGPUs(ListGPUsRequest) returns (ListGPUsResponse);
+  rpc RunBenchmark(BenchmarkRequest) returns (BenchmarkResponse);
 }
 ```
 
@@ -280,6 +351,8 @@ gpufabric/
 ├── client/
 │   ├── __init__.py           # Exports GPUFabricClient
 │   ├── client.py             # Core gRPC Python client SDK
+│   ├── bench.py              # Benchmark pass/fail checks
+│   ├── verify.py             # numpy reference results for verification
 │   ├── commands.py           # CLI sub-command handlers
 │   ├── formatters.py         # Rich terminal output formatters
 │   ├── cli.py                # Argument parsing & dispatch
@@ -299,6 +372,9 @@ gpufabric/
 │   ├── gpufabric_pb2_grpc.py # Generated gRPC stubs & servicer
 │   ├── constants.py          # Port, version & message size constants
 │   ├── grpc_options.py       # Shared gRPC channel/server options
+│   ├── tensor.py             # numpy <-> Tensor message conversion
+│   ├── tls.py                # mTLS certificates & gRPC credentials
+│   ├── certs_cli.py          # gpufabric-certs command
 │   └── formatting.py         # Human-readable formatters
 ├── scripts/
 │   └── gen_proto.py          # Regenerates common/gpufabric_pb2*.py
@@ -321,6 +397,14 @@ Run the automated test suite:
 ```bash
 pytest -v
 ```
+
+### Remote GPU tests
+
+`tests/test_remote_gpu.py` checks that a real worker GPU is reachable and computes correctly over the network: every operation, float32/float64, up to 1M-element vectors and 1000x1000 matrices, verified against numpy. Start a worker, then point the tests at it:
+```bash
+GPUFABRIC_WORKER=192.168.1.50:50051 pytest -m remote_gpu -v
+```
+Set `GPUFABRIC_DEVICE` to test a GPU other than `0`. Without `GPUFABRIC_WORKER` these tests are skipped, which is what happens in CI.
 
 Run code formatting and linting:
 ```bash

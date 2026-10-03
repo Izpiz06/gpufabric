@@ -7,16 +7,40 @@ import grpc
 from common.constants import API_VERSION
 from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
+    Benchmark,
+    BenchmarkResponse,
+    ComputeResponse,
     ExecuteResponse,
+    GPUDevice,
     GPUInfoResponse,
     GPUStatusResponse,
     HealthResponse,
+    ListGPUsResponse,
+    Operation,
     WorkloadType,
 )
 from common.gpufabric_pb2_grpc import GPUFabricServiceServicer
-from worker.executor import GPUExecutionError, GPUExecutor
+from common.tensor import TensorError, from_tensor, to_tensor
+from worker.executor import GPUExecutionError, GPUExecutor, GPUOutOfMemoryError
 from worker.gpu import GPUManager
 from worker.state import WorkerState
+
+# Protobuf Operation enum -> executor operation name.
+_OPERATIONS = {
+    Operation.OP_VECTOR_ADD: "vector_add",
+    Operation.OP_VECTOR_MUL: "vector_mul",
+    Operation.OP_VECTOR_DOT: "vector_dot",
+    Operation.OP_MATRIX_ADD: "matrix_add",
+    Operation.OP_MATMUL: "matmul",
+    Operation.OP_TRIAD: "triad",
+}
+
+_BENCHMARKS = {
+    Benchmark.BENCH_TRIAD: "triad",
+    Benchmark.BENCH_MATMUL: "matmul",
+    Benchmark.BENCH_MONTE_CARLO_PI: "monte_carlo_pi",
+}
+DEFAULT_BENCHMARK_REPEATS = 5
 
 
 class GPUFabricServicer(GPUFabricServiceServicer):
@@ -117,3 +141,90 @@ class GPUFabricServicer(GPUFabricServiceServicer):
             context.abort(grpc.StatusCode.INTERNAL, f"Workload execution failed: {e}")
         finally:
             self.state.decrement_tasks()
+
+    def _run_gpu_task(self, context, label, fn):
+        """Run fn() as an active task and map executor errors to gRPC codes."""
+        self.state.increment_tasks()
+        try:
+            return fn()
+        except ValueError as e:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+        except GPUOutOfMemoryError as e:
+            context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, f"GPU out of memory: {e}")
+        except GPUExecutionError as e:
+            context.abort(grpc.StatusCode.UNAVAILABLE, str(e))
+        except Exception as e:
+            context.abort(grpc.StatusCode.INTERNAL, f"{label} failed: {e}")
+        finally:
+            self.state.decrement_tasks()
+
+    def Compute(self, request, context) -> ComputeResponse:
+        op = _OPERATIONS.get(request.op)
+        if op is None:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"Unsupported operation: {request.op}")
+        try:
+            inputs = [from_tensor(t) for t in request.inputs]
+        except TensorError as e:
+            context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
+
+        task_id = str(uuid.uuid4())
+        result, gpu_ms, total_ms = self._run_gpu_task(
+            context, "Compute", lambda: self.executor.compute(op, inputs, request.device_index)
+        )
+        return ComputeResponse(
+            task_id=task_id,
+            result=to_tensor(result),
+            gpu_time_ms=gpu_ms,
+            total_time_ms=total_ms,
+            device_index=request.device_index,
+        )
+
+    def ListGPUs(self, request, context) -> ListGPUsResponse:
+        try:
+            devices = self.gpu.list_devices()
+        except Exception as e:
+            context.abort(grpc.StatusCode.INTERNAL, f"Failed to query GPUs: {e}")
+        return ListGPUsResponse(
+            worker_id=self.state.worker_id,
+            version=API_VERSION,
+            driver_version=devices[0]["driver_version"] if devices else "",
+            compute_ready=self.executor.is_gpu_ready(),
+            gpus=[
+                GPUDevice(
+                    device_index=d["device_index"],
+                    name=d["name"],
+                    total_vram_bytes=d["total_vram"],
+                    free_vram_bytes=d["free_vram"],
+                    compute_capability=d["compute_capability"],
+                    gpu_utilization_pct=d["gpu_util"],
+                    temperature_c=d["temp"],
+                )
+                for d in devices
+            ],
+        )
+
+    def RunBenchmark(self, request, context) -> BenchmarkResponse:
+        name = _BENCHMARKS.get(request.benchmark)
+        if name is None:
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT, f"Unsupported benchmark: {request.benchmark}"
+            )
+        repeats = request.repeats or DEFAULT_BENCHMARK_REPEATS
+        r = self._run_gpu_task(
+            context,
+            "Benchmark",
+            lambda: self.executor.run_benchmark(name, request.size, request.device_index, repeats),
+        )
+        peak = self.gpu.peak_memory_bandwidth(request.device_index) if name == "triad" else 0.0
+        return BenchmarkResponse(
+            benchmark=request.benchmark,
+            size=request.size,
+            device_index=request.device_index,
+            repeats=repeats,
+            best_ms=r["best_ms"],
+            mean_ms=r["mean_ms"],
+            bandwidth_gb_s=r.get("bandwidth_gb_s", 0.0),
+            peak_bandwidth_gb_s=peak,
+            gflops=r.get("gflops", 0.0),
+            pi_estimate=r.get("pi_estimate", 0.0),
+        )

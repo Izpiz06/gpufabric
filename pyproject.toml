@@ -22,7 +22,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
+    "cryptography>=42.0.0",
     "grpcio>=1.84.0",
+    "numpy>=1.24",
     "protobuf>=7.35.1,<8",
     "pynvml>=11.5.0",
     "rich>=13.0.0",
@@ -41,6 +43,7 @@ dev = [
 [project.scripts]
 gpufabric-client = "client.cli:main"
 gpufabric-worker = "worker.server:run_worker"
+gpufabric-certs = "common.certs_cli:main"
 
 [tool.setuptools]
 packages = ["client", "worker", "common"]
@@ -48,6 +51,9 @@ packages = ["client", "worker", "common"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "remote_gpu: needs a running worker with a GPU (set GPUFABRIC_WORKER=host:port)",
+]
 
 [tool.ruff]
 line-length = 100

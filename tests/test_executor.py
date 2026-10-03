@@ -2,9 +2,16 @@
 
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
-from worker.executor import GPUExecutionError, GPUExecutor
+from worker.executor import (
+    OPERATIONS,
+    GPUExecutionError,
+    GPUExecutor,
+    sample_inputs,
+    validate_inputs,
+)
 
 
 def test_executor_validation():
@@ -22,7 +29,6 @@ def test_executor_no_gpu():
 
 def test_executor_cupy_mock():
     executor = GPUExecutor()
-    executor.backend = "cupy"
 
     mock_cp = MagicMock()
     mock_cp.cuda.Device.return_value.__enter__.return_value = None
@@ -49,9 +55,105 @@ def test_warmup_skips_without_gpu():
 def test_warmup_runs_each_device_and_survives_failures():
     executor = GPUExecutor()
     executor.device_count = 2
-    with patch.object(executor, "is_gpu_ready", return_value=True):
-        with patch.object(
+    with (
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(
             executor, "execute_vector_add", side_effect=[RuntimeError("boom"), ([2.0], 0.1, "cupy")]
-        ) as run:
-            executor.warmup()
-            assert [c.args[2] for c in run.call_args_list] == [0, 1]
+        ) as run,
+        patch.object(executor, "compute") as compute,
+    ):
+        executor.warmup()
+    assert [c.args[2] for c in run.call_args_list] == [0, 1]
+    # Device 0 failed early; device 1 compiled every op for both dtypes.
+    assert {c.args[2] for c in compute.call_args_list} == {1}
+    assert compute.call_count == 2 * len(OPERATIONS)
+
+
+@pytest.mark.parametrize("op", sorted(OPERATIONS))
+def test_sample_inputs_are_valid(op):
+    for dtype in (np.float32, np.float64):
+        validate_inputs(op, sample_inputs(op, dtype))
+
+
+def _f32(*shape):
+    return np.zeros(shape, dtype=np.float32)
+
+
+@pytest.mark.parametrize(
+    "op, inputs, message",
+    [
+        ("transpose", [_f32(2), _f32(2)], "Unsupported operation"),
+        ("vector_add", [_f32(2)], "takes 2 inputs"),
+        ("vector_add", [_f32(2), np.zeros(2, dtype=np.float64)], "share a dtype"),
+        ("vector_mul", [_f32(2, 2), _f32(2, 2)], "1-D vectors"),
+        ("vector_dot", [_f32(2), _f32(3)], "size mismatch"),
+        ("matrix_add", [_f32(2), _f32(2)], "2-D matrices"),
+        ("matrix_add", [_f32(2, 3), _f32(3, 2)], "shape mismatch"),
+        ("matmul", [_f32(2, 3), _f32(2, 3)], "inner dimensions"),
+    ],
+)
+def test_validate_inputs_rejects(op, inputs, message):
+    with pytest.raises(ValueError, match=message):
+        validate_inputs(op, inputs)
+
+
+@pytest.mark.parametrize(
+    "op, inputs",
+    [
+        ("vector_add", [_f32(5), _f32(5)]),
+        ("vector_dot", [_f32(5), _f32(5)]),
+        ("matrix_add", [_f32(2, 3), _f32(2, 3)]),
+        ("matmul", [_f32(2, 3), _f32(3, 4)]),
+    ],
+)
+def test_validate_inputs_accepts(op, inputs):
+    validate_inputs(op, inputs)
+
+
+def test_compute_rejects_out_of_range_device():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    with pytest.raises(ValueError, match="Invalid device_index 3"):
+        executor.compute("vector_add", [_f32(2), _f32(2)], device_index=3)
+
+
+def test_compute_without_gpu():
+    executor = GPUExecutor()
+    with patch.object(executor, "is_gpu_ready", return_value=False):
+        with pytest.raises(GPUExecutionError):
+            executor.compute("vector_add", [_f32(2), _f32(2)])
+
+
+@pytest.mark.parametrize(
+    "inputs, message",
+    [
+        ([_f32(3), _f32(3)], "takes 3 inputs"),
+        ([_f32(3), _f32(4), np.array(1.0, np.float32)], "two equal 1-D vectors"),
+        ([_f32(3), _f32(3), _f32(1)], "scalar must be 0-D"),
+        ([_f32(3), _f32(3), np.array(1.0)], "share a dtype"),
+    ],
+)
+def test_validate_triad_rejects(inputs, message):
+    with pytest.raises(ValueError, match=message):
+        validate_inputs("triad", inputs)
+
+
+@pytest.mark.parametrize(
+    "name, size, repeats, message",
+    [
+        ("stream_copy", 10, 5, "Unsupported benchmark"),
+        ("triad", 0, 5, "must be positive"),
+        ("matmul", 10, 0, "repeats must be between"),
+        ("matmul", 10, 101, "repeats must be between"),
+    ],
+)
+def test_run_benchmark_validation(name, size, repeats, message):
+    with pytest.raises(ValueError, match=message):
+        GPUExecutor().run_benchmark(name, size, repeats=repeats)
+
+
+def test_run_benchmark_without_gpu():
+    executor = GPUExecutor()
+    with patch.object(executor, "is_gpu_ready", return_value=False):
+        with pytest.raises(GPUExecutionError):
+            executor.run_benchmark("triad", 10)

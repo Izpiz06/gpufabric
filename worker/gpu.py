@@ -2,7 +2,7 @@
 
 import logging
 import warnings
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 logger = logging.getLogger("gpufabric.worker.gpu")
 
@@ -47,6 +47,33 @@ class GPUManager:
             return pynvml.nvmlDeviceGetCount() > 0
         except Exception:
             return False
+
+    def device_count(self) -> int:
+        """Number of GPUs NVML can see (0 if NVML is unavailable)."""
+        if not self.is_available():
+            return 0
+        return pynvml.nvmlDeviceGetCount()
+
+    def list_devices(self) -> List[Dict[str, Any]]:
+        """Specs and live status for every GPU, merged into one dict per device."""
+        return [{**self.get_info(i), **self.get_status(i)} for i in range(self.device_count())]
+
+    def peak_memory_bandwidth(self, device_index: int = 0) -> float:
+        """Theoretical peak memory bandwidth in GB/s (1e9 bytes), or 0.0 if unknown.
+
+        max memory clock (MHz) * 2 (double data rate) * bus width (bits) / 8.
+        Matches published specs for GDDR6 (RTX 3050: 188 GB/s), GDDR6X and HBM.
+        """
+        if not self.is_available():
+            return 0.0
+        try:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
+            clock_mhz = pynvml.nvmlDeviceGetMaxClockInfo(handle, pynvml.NVML_CLOCK_MEM)
+            bus_bits = pynvml.nvmlDeviceGetMemoryBusWidth(handle)
+        except Exception as e:
+            logger.debug(f"Peak bandwidth unavailable for GPU {device_index}: {e}")
+            return 0.0
+        return clock_mhz * 1e6 * 2 * bus_bits / 8 / 1e9
 
     def get_info(self, device_index: int = 0) -> Dict[str, Any]:
         """Fetch static GPU device specs."""
