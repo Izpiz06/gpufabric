@@ -7,7 +7,9 @@ import grpc
 import pytest
 
 from client.client import GPUFabricClient
+from common.constants import DEFAULT_MAX_MESSAGE_MB
 from common.gpufabric_pb2_grpc import add_GPUFabricServiceServicer_to_server
+from common.grpc_options import message_size_options
 from worker.executor import GPUExecutor
 from worker.gpu import GPUManager
 from worker.service import GPUFabricServicer
@@ -16,7 +18,10 @@ from worker.state import WorkerState
 
 @pytest.fixture(scope="module")
 def grpc_server():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=2))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=2),
+        options=message_size_options(DEFAULT_MAX_MESSAGE_MB),
+    )
     state = WorkerState("test-worker-e2e")
     gpu = GPUManager()
     executor = GPUExecutor()
@@ -71,3 +76,14 @@ def test_client_execute_vector_add(grpc_server):
             assert resp.status == "success"
             assert list(resp.result) == [10.0, 20.0]
             assert resp.gpu_backend == "torch_cuda"
+
+
+def test_client_execute_payload_above_grpc_default_limit(grpc_server):
+    # 600k float32 per vector is ~4.8 MB per request, above gRPC's 4 MiB default.
+    port, _, _, executor = grpc_server
+    n = 600_000
+    with patch.object(executor, "execute_vector_add", return_value=([2.0] * n, 1.0, "cupy")):
+        with GPUFabricClient(host="127.0.0.1", port=port) as client:
+            resp = client.execute_vector_add(a=[1.0] * n, b=[1.0] * n)
+            assert resp.result_length == n
+            assert len(resp.result) == n

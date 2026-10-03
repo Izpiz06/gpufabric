@@ -36,3 +36,22 @@ def test_executor_cupy_mock():
             assert res == [3.0, 7.0]
             assert backend == "cupy"
             assert elapsed >= 0.0
+
+
+def test_warmup_skips_without_gpu():
+    executor = GPUExecutor()
+    with patch.object(executor, "is_gpu_ready", return_value=False):
+        with patch.object(executor, "execute_vector_add") as run:
+            executor.warmup()
+            run.assert_not_called()
+
+
+def test_warmup_runs_each_device_and_survives_failures():
+    executor = GPUExecutor()
+    executor.device_count = 2
+    with patch.object(executor, "is_gpu_ready", return_value=True):
+        with patch.object(
+            executor, "execute_vector_add", side_effect=[RuntimeError("boom"), ([2.0], 0.1, "cupy")]
+        ) as run:
+            executor.warmup()
+            assert [c.args[2] for c in run.call_args_list] == [0, 1]

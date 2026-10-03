@@ -6,7 +6,7 @@ import sys
 from client.client import GPUFabricClient, GPUFabricError
 from client.commands import cmd_discover, cmd_execute, cmd_gpu, cmd_status
 from client.formatters import console
-from common.constants import DEFAULT_PORT
+from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -15,6 +15,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--port", type=int, default=DEFAULT_PORT, help=f"Worker port (default: {DEFAULT_PORT})"
     )
     p.add_argument("--timeout", type=float, default=15.0, help="Timeout in seconds (default: 15.0)")
+    p.add_argument(
+        "--max-message-mb",
+        type=int,
+        default=DEFAULT_MAX_MESSAGE_MB,
+        help=f"Max gRPC message size in MiB (default: {DEFAULT_MAX_MESSAGE_MB})",
+    )
 
     sub = p.add_subparsers(dest="command", help="Command")
 
@@ -46,8 +52,15 @@ def main():
     if not args.command:
         parser.print_help()
         sys.exit(0)
+    if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
+        parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
 
-    with GPUFabricClient(host=args.worker_ip, port=args.port, timeout=args.timeout) as client:
+    with GPUFabricClient(
+        host=args.worker_ip,
+        port=args.port,
+        timeout=args.timeout,
+        max_message_mb=args.max_message_mb,
+    ) as client:
         try:
             if args.command == "discover":
                 cmd_discover(client, args)

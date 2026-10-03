@@ -10,7 +10,7 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 
 [![CI](https://github.com/Izpiz06/gpufabric/actions/workflows/ci.yml/badge.svg)](https://github.com/Izpiz06/gpufabric/actions/workflows/ci.yml)
 [![Build & Prebuilds](https://github.com/Izpiz06/gpufabric/actions/workflows/build.yml/badge.svg)](https://github.com/Izpiz06/gpufabric/actions/workflows/build.yml)
-[![Python Versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/gpufabric/)
+[![Python Versions](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://pypi.org/project/gpufabric/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![gRPC](https://img.shields.io/badge/RPC-gRPC%20%2B%20Protobuf-3B82F6?logo=google&logoColor=white)](https://grpc.io)
 [![CUDA](https://img.shields.io/badge/NVIDIA-CUDA_Ready-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
@@ -90,7 +90,7 @@ flowchart LR
 ## 📦 Installation
 
 ### Prerequisites
-* Python **3.9+**
+* Python **3.10+**
 * Linux / Windows / macOS (Client runs on any OS; Worker requires an NVIDIA GPU with drivers installed)
 
 ### 1. Clone & Install Core Package
@@ -133,6 +133,8 @@ python -m worker --host 0.0.0.0 --port 50051
 * `--port`: Port number (default: `50051`)
 * `--worker-id`: Custom name/tag for the worker node
 * `--log-level`: `debug`, `info`, `warning`, `error`
+* `--max-message-mb`: Max gRPC message size in MiB (default: `256`, max: `2047`). The client CLI accepts the same flag; set both sides when sending larger payloads.
+* `--no-warmup`: Skip the warm-up kernel that runs on every GPU at startup to absorb the one-time CUDA initialization cost
 
 ---
 
@@ -293,9 +295,13 @@ gpufabric/
 ├── common/
 │   ├── __init__.py
 │   ├── gpufabric_pb2.py      # Generated protobuf classes
+│   ├── gpufabric_pb2.pyi     # Generated type stubs
 │   ├── gpufabric_pb2_grpc.py # Generated gRPC stubs & servicer
-│   ├── constants.py          # Port & version constants
+│   ├── constants.py          # Port, version & message size constants
+│   ├── grpc_options.py       # Shared gRPC channel/server options
 │   └── formatting.py         # Human-readable formatters
+├── scripts/
+│   └── gen_proto.py          # Regenerates common/gpufabric_pb2*.py
 ├── tests/
 │   ├── test_client.py        # Client gRPC tests
 │   ├── test_common.py        # Protocol & formatting tests
@@ -319,7 +325,16 @@ pytest -v
 Run code formatting and linting:
 ```bash
 ruff check .
+ruff format --check .
 ```
+
+### Regenerating gRPC code
+
+After editing `proto/gpufabric.proto`, regenerate the Python code (requires `grpcio-tools==1.84.0`, the version CI checks against):
+```bash
+python scripts/gen_proto.py
+```
+Never edit `common/gpufabric_pb2*.py` by hand. CI regenerates them and fails if the committed files differ.
 
 ---
 

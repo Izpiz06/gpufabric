@@ -1,6 +1,8 @@
 """Tests for common utilities and protobuf models."""
 
-from common.constants import DEFAULT_PORT
+import pytest
+
+from common.constants import DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
 from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
     ExecuteRequest,
@@ -9,6 +11,7 @@ from common.gpufabric_pb2 import (
     HealthResponse,
     WorkloadType,
 )
+from common.grpc_options import message_size_options
 
 
 def test_bytes_to_human():
@@ -50,3 +53,15 @@ def test_protobuf_messages():
     )
     assert resp.status == "success"
     assert list(resp.result) == [4.0, 6.0]
+
+
+def test_message_size_options():
+    opts = dict(message_size_options(256))
+    assert opts["grpc.max_send_message_length"] == 256 * 1024 * 1024
+    assert opts["grpc.max_receive_message_length"] == 256 * 1024 * 1024
+
+
+@pytest.mark.parametrize("bad", [0, -1, MAX_MESSAGE_MB_LIMIT + 1])
+def test_message_size_options_rejects_out_of_range(bad):
+    with pytest.raises(ValueError):
+        message_size_options(bad)

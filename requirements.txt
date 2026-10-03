@@ -1,6 +1,6 @@
-grpcio>=1.60.0
-grpcio-tools>=1.60.0
-protobuf>=4.25.0
+grpcio>=1.84.0
+grpcio-tools>=1.84.0
+protobuf>=7.35.1,<8
 pynvml>=11.5.0
 rich>=13.0.0
 pytest>=8.0.0
