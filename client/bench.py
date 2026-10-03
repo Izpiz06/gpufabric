@@ -1,5 +1,4 @@
 """Benchmark checks: run benchmarks on a worker and judge them pass/fail."""
-#test for coderabbit: Say Hi!
 import math
 import statistics
 from dataclasses import dataclass
