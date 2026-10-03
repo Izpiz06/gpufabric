@@ -139,8 +139,17 @@ def main():
     args = parser.parse_args()
 
     if not args.command:
-        parser.print_help()
-        sys.exit(0)
+        from client.tui.app import GPUFabricApp
+
+        app = GPUFabricApp(
+            port=args.port,
+            timeout=args.timeout,
+            max_message_mb=args.max_message_mb,
+            tls_dir=args.tls_dir,
+            insecure=args.insecure,
+        )
+        app.run()
+        return
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
 
