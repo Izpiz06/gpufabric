@@ -5,5 +5,7 @@ numpy>=1.24
 protobuf>=7.35.1,<8
 pynvml>=11.5.0
 rich>=13.0.0
+textual>=0.70.0
 zeroconf>=0.130.0
 pytest>=8.0.0
+

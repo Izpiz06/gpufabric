@@ -28,6 +28,7 @@ dependencies = [
     "protobuf>=7.35.1,<8",
     "pynvml>=11.5.0",
     "rich>=13.0.0",
+    "textual>=0.70.0",
     "zeroconf>=0.130.0",
 ]
 
@@ -42,6 +43,7 @@ dev = [
 ]
 
 [project.scripts]
+gpufabric = "client.cli:main"
 gpufabric-client = "client.cli:main"
 gpufabric-worker = "worker.server:run_worker"
 gpufabric-certs = "common.certs_cli:main"
