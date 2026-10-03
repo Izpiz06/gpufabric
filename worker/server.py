@@ -96,6 +96,11 @@ def parse_args():
         action="store_true",
         help="Disable TLS: traffic is unencrypted and any client can connect",
     )
+    parser.add_argument(
+        "--no-discovery",
+        action="store_true",
+        help="Disable automatic LAN service advertisement (mDNS/DNS-SD)",
+    )
     args = parser.parse_args()
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
@@ -120,7 +125,7 @@ def run_worker():
         max_message_mb=args.max_message_mb,
         warmup=not args.no_warmup,
     )
-    bind(server, bind_address, credentials)
+    bound_port = bind(server, bind_address, credentials)
     if credentials is None:
         logger.warning(
             "Running WITHOUT TLS: traffic is unencrypted and any client on the network "
@@ -129,8 +134,26 @@ def run_worker():
         logger.info(f"GPU Fabric gRPC worker running on {bind_address}")
     else:
         logger.info(f"GPU Fabric gRPC worker running on {bind_address} with mutual TLS")
+
     server.start()
-    server.wait_for_termination()
+
+    advertiser = None
+    if not args.no_discovery:
+        from common.discovery import WorkerAdvertiser
+
+        effective_id = args.worker_id or WorkerState(None).worker_id
+        advertiser = WorkerAdvertiser(
+            worker_id=effective_id,
+            port=bound_port,
+            host=args.host,
+        )
+        advertiser.start()
+
+    try:
+        server.wait_for_termination()
+    finally:
+        if advertiser is not None:
+            advertiser.stop()
 
 
 if __name__ == "__main__":
