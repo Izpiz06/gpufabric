@@ -8,3 +8,7 @@ API_VERSION = "0.1.0"
 DEFAULT_MAX_MESSAGE_MB = 256
 # Protobuf cannot serialize a single message of 2 GiB or more.
 MAX_MESSAGE_MB_LIMIT = 2047
+
+# mDNS / DNS-SD LAN service discovery
+DISCOVERY_SERVICE_TYPE = "_gpufabric._tcp.local."
+DEFAULT_DISCOVERY_TIMEOUT = 3.0

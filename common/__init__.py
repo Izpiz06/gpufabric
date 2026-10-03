@@ -1,6 +1,18 @@
 """GPU Fabric common protobuf and helper exports."""
 
-from common.constants import API_VERSION, DEFAULT_PORT
+from common.constants import (
+    API_VERSION,
+    DEFAULT_DISCOVERY_TIMEOUT,
+    DEFAULT_PORT,
+    DISCOVERY_SERVICE_TYPE,
+)
+from common.discovery import (
+    DiscoveredCandidate,
+    DiscoveredWorker,
+    WorkerAdvertiser,
+    browse_lan_candidates,
+    get_local_ip_addresses,
+)
 from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
     ExecuteRequest,
@@ -22,7 +34,14 @@ from common.gpufabric_pb2_grpc import (
 __all__ = [
     "DEFAULT_PORT",
     "API_VERSION",
+    "DISCOVERY_SERVICE_TYPE",
+    "DEFAULT_DISCOVERY_TIMEOUT",
     "bytes_to_human",
+    "DiscoveredCandidate",
+    "DiscoveredWorker",
+    "WorkerAdvertiser",
+    "browse_lan_candidates",
+    "get_local_ip_addresses",
     "HealthRequest",
     "HealthResponse",
     "GPUInfoRequest",
