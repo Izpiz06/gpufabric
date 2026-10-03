@@ -175,6 +175,7 @@ gpufabric-worker --host 0.0.0.0 --port 50051
 | `--max-message-mb` | `256` | Maximum gRPC message size in MiB (up to 2047) |
 | `--tls-dir` | `~/.config/gpufabric/tls` | Path to TLS certificate directory |
 | `--insecure` | `false` | Run without mTLS encryption (plaintext, dev-only) |
+| `--no-discovery` | `false` | Disable automatic mDNS/DNS-SD LAN service advertisement |
 | `--no-warmup` | `false` | Skip initial GPU warmup kernel on startup |
 
 ---
@@ -192,8 +193,17 @@ export GPUFABRIC_WORKERS=192.168.1.50,192.168.1.51:6000
 python -m client ls
 ```
 
-#### 2. Discover / Health Check
+#### 2. Discover Workers (Automatic LAN Scan & Explicit Address)
+
+Scan your local network for active GPU Fabric workers via mDNS / DNS-SD:
 ```bash
+# Automatic LAN discovery (mDNS scan across local subnet):
+python -m client discover
+
+# Custom timeout:
+python -m client discover --timeout 5
+
+# Query explicit worker address directly:
 python -m client discover 192.168.1.50
 ```
 
