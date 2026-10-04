@@ -10,18 +10,38 @@ from common.gpufabric_pb2 import (
     GPUInfoResponse,
     GPUStatusResponse,
     HealthResponse,
+    HealthState,
 )
 
 console = Console()
 
 
 def print_health(target: str, info: HealthResponse):
-    content = (
-        f"[bold]Worker ID:[/bold] {info.worker_id}\n"
-        f"[bold]Status:[/bold] [green]{info.status.upper()}[/green]\n"
-        f"[bold]Version:[/bold] {info.version}\n"
-        f"[bold]GPU Available:[/bold] {'[green]Yes[/green]' if info.gpu_available else '[red]No[/red]'}"
+    state_map = {
+        HealthState.HEALTHY: "[bold green]HEALTHY[/bold green]",
+        HealthState.DEGRADED: "[bold yellow]DEGRADED[/bold yellow]",
+        HealthState.UNAVAILABLE: "[bold red]UNAVAILABLE[/bold red]",
+    }
+    state_badge = state_map.get(info.health_state, f"[green]{info.status.upper()}[/green]")
+    status_fmt = (
+        f"[green]{info.status.upper()}[/green]"
+        if info.status == "ok"
+        else f"[red]{info.status.upper()}[/red]"
     )
+    lines = [
+        f"[bold]Worker ID:[/bold] {info.worker_id}",
+        f"[bold]Hostname:[/bold] {info.hostname or 'N/A'}",
+        f"[bold]Health State:[/bold] {state_badge}",
+        f"[bold]Status:[/bold] {status_fmt}",
+        f"[bold]Version:[/bold] {info.version}",
+        f"[bold]CUDA Version:[/bold] {info.cuda_version or 'N/A'}",
+        f"[bold]Driver Version:[/bold] {info.driver_version or 'N/A'}",
+        f"[bold]GPU Available:[/bold] {'[green]Yes[/green]' if info.gpu_available else '[red]No[/red]'} (Count: {info.gpu_count})",
+        f"[bold]Active Tasks:[/bold] {info.active_tasks}",
+    ]
+    if info.health_details:
+        lines.append(f"[bold]Health Details:[/bold] {info.health_details}")
+    content = "\n".join(lines)
     console.print(Panel(content, title=f"Worker @ {target}", expand=False))
 
 
@@ -75,7 +95,18 @@ def print_status(status: GPUStatusResponse):
     t.add_row("Free VRAM", status.free_vram_human)
     t.add_row("Used VRAM", status.used_vram_human)
     t.add_row("Temperature", f"{status.temperature_c} °C")
+    if status.power_usage_w > 0 or status.power_limit_w > 0:
+        p_str = f"{status.power_usage_w} W"
+        if status.power_limit_w > 0:
+            p_str += f" / {status.power_limit_w} W"
+        t.add_row("Power Usage", p_str)
+    t.add_row(
+        "Availability",
+        "[green]Available[/green]" if status.available else "[red]Unavailable[/red]",
+    )
     t.add_row("Active Tasks", str(status.active_tasks))
+    if status.current_workload:
+        t.add_row("Current Workload", status.current_workload)
     console.print(t)
 
 
@@ -121,23 +152,35 @@ def print_compute(op: str, res, rel_error: float, verified: bool):
 def print_inventory(rows):
     """rows: list of (worker address, ListGPUsResponse or error string)."""
     t = Table(title="GPU Inventory")
-    for col in ("Worker", "GPU", "Name", "VRAM free / total", "Util", "Temp", "CC", "Compute"):
+    for col in (
+        "Worker",
+        "GPU",
+        "Name",
+        "VRAM free / total",
+        "Util",
+        "Power",
+        "Temp",
+        "CC",
+        "Compute",
+    ):
         t.add_column(col)
     for target, result in rows:
         if isinstance(result, str):
-            t.add_row(target, "-", f"[red]unreachable[/red] {result}", "", "", "", "", "")
+            t.add_row(target, "-", f"[red]unreachable[/red] {result}", "", "", "", "", "", "")
             continue
         label = f"{target}\n[dim]{result.worker_id}[/dim]"
         compute = "[green]ready[/green]" if result.compute_ready else "[red]no CuPy[/red]"
         if not result.gpus:
-            t.add_row(label, "-", "[yellow]no GPUs found[/yellow]", "", "", "", "", compute)
+            t.add_row(label, "-", "[yellow]no GPUs found[/yellow]", "", "", "", "", "", compute)
         for gpu in result.gpus:
+            power_str = f"{gpu.power_usage_w} W" if gpu.power_usage_w > 0 else "-"
             t.add_row(
                 label,
                 str(gpu.device_index),
                 gpu.name,
                 f"{bytes_to_human(gpu.free_vram_bytes)} / {bytes_to_human(gpu.total_vram_bytes)}",
                 f"{gpu.gpu_utilization_pct}%",
+                power_str,
                 f"{gpu.temperature_c} °C",
                 gpu.compute_capability or "N/A",
                 compute,

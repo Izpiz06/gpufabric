@@ -7,6 +7,13 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class HealthState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    HEALTH_STATE_UNSPECIFIED: _ClassVar[HealthState]
+    HEALTHY: _ClassVar[HealthState]
+    DEGRADED: _ClassVar[HealthState]
+    UNAVAILABLE: _ClassVar[HealthState]
+
 class WorkloadType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     WORKLOAD_UNSPECIFIED: _ClassVar[WorkloadType]
@@ -34,6 +41,10 @@ class Benchmark(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     BENCH_TRIAD: _ClassVar[Benchmark]
     BENCH_MATMUL: _ClassVar[Benchmark]
     BENCH_MONTE_CARLO_PI: _ClassVar[Benchmark]
+HEALTH_STATE_UNSPECIFIED: HealthState
+HEALTHY: HealthState
+DEGRADED: HealthState
+UNAVAILABLE: HealthState
 WORKLOAD_UNSPECIFIED: WorkloadType
 VECTOR_ADD: WorkloadType
 DTYPE_UNSPECIFIED: DType
@@ -56,16 +67,34 @@ class HealthRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class HealthResponse(_message.Message):
-    __slots__ = ("status", "worker_id", "version", "gpu_available")
+    __slots__ = ("status", "worker_id", "version", "gpu_available", "health_state", "hostname", "api_version", "cuda_version", "driver_version", "last_heartbeat", "health_details", "active_tasks", "gpu_count")
     STATUS_FIELD_NUMBER: _ClassVar[int]
     WORKER_ID_FIELD_NUMBER: _ClassVar[int]
     VERSION_FIELD_NUMBER: _ClassVar[int]
     GPU_AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    HEALTH_STATE_FIELD_NUMBER: _ClassVar[int]
+    HOSTNAME_FIELD_NUMBER: _ClassVar[int]
+    API_VERSION_FIELD_NUMBER: _ClassVar[int]
+    CUDA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    DRIVER_VERSION_FIELD_NUMBER: _ClassVar[int]
+    LAST_HEARTBEAT_FIELD_NUMBER: _ClassVar[int]
+    HEALTH_DETAILS_FIELD_NUMBER: _ClassVar[int]
+    ACTIVE_TASKS_FIELD_NUMBER: _ClassVar[int]
+    GPU_COUNT_FIELD_NUMBER: _ClassVar[int]
     status: str
     worker_id: str
     version: str
     gpu_available: bool
-    def __init__(self, status: _Optional[str] = ..., worker_id: _Optional[str] = ..., version: _Optional[str] = ..., gpu_available: _Optional[bool] = ...) -> None: ...
+    health_state: HealthState
+    hostname: str
+    api_version: str
+    cuda_version: str
+    driver_version: str
+    last_heartbeat: float
+    health_details: str
+    active_tasks: int
+    gpu_count: int
+    def __init__(self, status: _Optional[str] = ..., worker_id: _Optional[str] = ..., version: _Optional[str] = ..., gpu_available: _Optional[bool] = ..., health_state: _Optional[_Union[HealthState, str]] = ..., hostname: _Optional[str] = ..., api_version: _Optional[str] = ..., cuda_version: _Optional[str] = ..., driver_version: _Optional[str] = ..., last_heartbeat: _Optional[float] = ..., health_details: _Optional[str] = ..., active_tasks: _Optional[int] = ..., gpu_count: _Optional[int] = ...) -> None: ...
 
 class GPUInfoRequest(_message.Message):
     __slots__ = ("device_index",)
@@ -104,7 +133,7 @@ class GPUStatusRequest(_message.Message):
     def __init__(self, device_index: _Optional[int] = ...) -> None: ...
 
 class GPUStatusResponse(_message.Message):
-    __slots__ = ("device_index", "gpu_utilization_pct", "memory_utilization_pct", "total_vram_bytes", "free_vram_bytes", "used_vram_bytes", "free_vram_human", "used_vram_human", "temperature_c", "active_tasks")
+    __slots__ = ("device_index", "gpu_utilization_pct", "memory_utilization_pct", "total_vram_bytes", "free_vram_bytes", "used_vram_bytes", "free_vram_human", "used_vram_human", "temperature_c", "active_tasks", "power_usage_w", "power_limit_w", "available", "current_workload")
     DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
     GPU_UTILIZATION_PCT_FIELD_NUMBER: _ClassVar[int]
     MEMORY_UTILIZATION_PCT_FIELD_NUMBER: _ClassVar[int]
@@ -115,6 +144,10 @@ class GPUStatusResponse(_message.Message):
     USED_VRAM_HUMAN_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_C_FIELD_NUMBER: _ClassVar[int]
     ACTIVE_TASKS_FIELD_NUMBER: _ClassVar[int]
+    POWER_USAGE_W_FIELD_NUMBER: _ClassVar[int]
+    POWER_LIMIT_W_FIELD_NUMBER: _ClassVar[int]
+    AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    CURRENT_WORKLOAD_FIELD_NUMBER: _ClassVar[int]
     device_index: int
     gpu_utilization_pct: int
     memory_utilization_pct: int
@@ -125,7 +158,11 @@ class GPUStatusResponse(_message.Message):
     used_vram_human: str
     temperature_c: int
     active_tasks: int
-    def __init__(self, device_index: _Optional[int] = ..., gpu_utilization_pct: _Optional[int] = ..., memory_utilization_pct: _Optional[int] = ..., total_vram_bytes: _Optional[int] = ..., free_vram_bytes: _Optional[int] = ..., used_vram_bytes: _Optional[int] = ..., free_vram_human: _Optional[str] = ..., used_vram_human: _Optional[str] = ..., temperature_c: _Optional[int] = ..., active_tasks: _Optional[int] = ...) -> None: ...
+    power_usage_w: int
+    power_limit_w: int
+    available: bool
+    current_workload: str
+    def __init__(self, device_index: _Optional[int] = ..., gpu_utilization_pct: _Optional[int] = ..., memory_utilization_pct: _Optional[int] = ..., total_vram_bytes: _Optional[int] = ..., free_vram_bytes: _Optional[int] = ..., used_vram_bytes: _Optional[int] = ..., free_vram_human: _Optional[str] = ..., used_vram_human: _Optional[str] = ..., temperature_c: _Optional[int] = ..., active_tasks: _Optional[int] = ..., power_usage_w: _Optional[int] = ..., power_limit_w: _Optional[int] = ..., available: _Optional[bool] = ..., current_workload: _Optional[str] = ...) -> None: ...
 
 class ExecuteRequest(_message.Message):
     __slots__ = ("workload_type", "a", "b", "device_index")
@@ -200,7 +237,7 @@ class ListGPUsRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class GPUDevice(_message.Message):
-    __slots__ = ("device_index", "name", "total_vram_bytes", "free_vram_bytes", "compute_capability", "gpu_utilization_pct", "temperature_c")
+    __slots__ = ("device_index", "name", "total_vram_bytes", "free_vram_bytes", "compute_capability", "gpu_utilization_pct", "temperature_c", "power_usage_w", "power_limit_w", "memory_utilization_pct", "available", "current_workload")
     DEVICE_INDEX_FIELD_NUMBER: _ClassVar[int]
     NAME_FIELD_NUMBER: _ClassVar[int]
     TOTAL_VRAM_BYTES_FIELD_NUMBER: _ClassVar[int]
@@ -208,6 +245,11 @@ class GPUDevice(_message.Message):
     COMPUTE_CAPABILITY_FIELD_NUMBER: _ClassVar[int]
     GPU_UTILIZATION_PCT_FIELD_NUMBER: _ClassVar[int]
     TEMPERATURE_C_FIELD_NUMBER: _ClassVar[int]
+    POWER_USAGE_W_FIELD_NUMBER: _ClassVar[int]
+    POWER_LIMIT_W_FIELD_NUMBER: _ClassVar[int]
+    MEMORY_UTILIZATION_PCT_FIELD_NUMBER: _ClassVar[int]
+    AVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    CURRENT_WORKLOAD_FIELD_NUMBER: _ClassVar[int]
     device_index: int
     name: str
     total_vram_bytes: int
@@ -215,21 +257,34 @@ class GPUDevice(_message.Message):
     compute_capability: str
     gpu_utilization_pct: int
     temperature_c: int
-    def __init__(self, device_index: _Optional[int] = ..., name: _Optional[str] = ..., total_vram_bytes: _Optional[int] = ..., free_vram_bytes: _Optional[int] = ..., compute_capability: _Optional[str] = ..., gpu_utilization_pct: _Optional[int] = ..., temperature_c: _Optional[int] = ...) -> None: ...
+    power_usage_w: int
+    power_limit_w: int
+    memory_utilization_pct: int
+    available: bool
+    current_workload: str
+    def __init__(self, device_index: _Optional[int] = ..., name: _Optional[str] = ..., total_vram_bytes: _Optional[int] = ..., free_vram_bytes: _Optional[int] = ..., compute_capability: _Optional[str] = ..., gpu_utilization_pct: _Optional[int] = ..., temperature_c: _Optional[int] = ..., power_usage_w: _Optional[int] = ..., power_limit_w: _Optional[int] = ..., memory_utilization_pct: _Optional[int] = ..., available: _Optional[bool] = ..., current_workload: _Optional[str] = ...) -> None: ...
 
 class ListGPUsResponse(_message.Message):
-    __slots__ = ("worker_id", "version", "driver_version", "compute_ready", "gpus")
+    __slots__ = ("worker_id", "version", "driver_version", "compute_ready", "gpus", "health_state", "cuda_version", "hostname", "last_heartbeat")
     WORKER_ID_FIELD_NUMBER: _ClassVar[int]
     VERSION_FIELD_NUMBER: _ClassVar[int]
     DRIVER_VERSION_FIELD_NUMBER: _ClassVar[int]
     COMPUTE_READY_FIELD_NUMBER: _ClassVar[int]
     GPUS_FIELD_NUMBER: _ClassVar[int]
+    HEALTH_STATE_FIELD_NUMBER: _ClassVar[int]
+    CUDA_VERSION_FIELD_NUMBER: _ClassVar[int]
+    HOSTNAME_FIELD_NUMBER: _ClassVar[int]
+    LAST_HEARTBEAT_FIELD_NUMBER: _ClassVar[int]
     worker_id: str
     version: str
     driver_version: str
     compute_ready: bool
     gpus: _containers.RepeatedCompositeFieldContainer[GPUDevice]
-    def __init__(self, worker_id: _Optional[str] = ..., version: _Optional[str] = ..., driver_version: _Optional[str] = ..., compute_ready: _Optional[bool] = ..., gpus: _Optional[_Iterable[_Union[GPUDevice, _Mapping]]] = ...) -> None: ...
+    health_state: HealthState
+    cuda_version: str
+    hostname: str
+    last_heartbeat: float
+    def __init__(self, worker_id: _Optional[str] = ..., version: _Optional[str] = ..., driver_version: _Optional[str] = ..., compute_ready: _Optional[bool] = ..., gpus: _Optional[_Iterable[_Union[GPUDevice, _Mapping]]] = ..., health_state: _Optional[_Union[HealthState, str]] = ..., cuda_version: _Optional[str] = ..., hostname: _Optional[str] = ..., last_heartbeat: _Optional[float] = ...) -> None: ...
 
 class BenchmarkRequest(_message.Message):
     __slots__ = ("benchmark", "size", "device_index", "repeats")

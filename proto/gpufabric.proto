@@ -16,6 +16,13 @@ service GPUFabricService {
   rpc RunBenchmark(BenchmarkRequest) returns (BenchmarkResponse);
 }
 
+enum HealthState {
+  HEALTH_STATE_UNSPECIFIED = 0;
+  HEALTHY = 1;
+  DEGRADED = 2;
+  UNAVAILABLE = 3;
+}
+
 message HealthRequest {}
 
 message HealthResponse {
@@ -23,6 +30,15 @@ message HealthResponse {
   string worker_id = 2;
   string version = 3;
   bool gpu_available = 4;
+  HealthState health_state = 5;
+  string hostname = 6;
+  string api_version = 7;
+  string cuda_version = 8;
+  string driver_version = 9;
+  double last_heartbeat = 10;
+  string health_details = 11;
+  int32 active_tasks = 12;
+  int32 gpu_count = 13;
 }
 
 message GPUInfoRequest {
@@ -57,6 +73,10 @@ message GPUStatusResponse {
   string used_vram_human = 8;
   int32 temperature_c = 9;
   int32 active_tasks = 10;
+  int32 power_usage_w = 11;
+  int32 power_limit_w = 12;
+  bool available = 13;
+  string current_workload = 14;
 }
 
 enum WorkloadType {
@@ -142,6 +162,11 @@ message GPUDevice {
   string compute_capability = 5;
   int32 gpu_utilization_pct = 6;
   int32 temperature_c = 7;
+  int32 power_usage_w = 8;
+  int32 power_limit_w = 9;
+  int32 memory_utilization_pct = 10;
+  bool available = 11;
+  string current_workload = 12;
 }
 
 message ListGPUsResponse {
@@ -152,6 +177,10 @@ message ListGPUsResponse {
   // see GPUs even when CuPy is missing, so this is reported separately.
   bool compute_ready = 4;
   repeated GPUDevice gpus = 5;
+  HealthState health_state = 6;
+  string cuda_version = 7;
+  string hostname = 8;
+  double last_heartbeat = 9;
 }
 
 // ---------------------------------------------------------------------------

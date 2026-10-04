@@ -13,7 +13,9 @@ from common.gpufabric_pb2 import (
     DType,
     ExecuteRequest,
     GPUInfoRequest,
+    GPUStatusRequest,
     HealthRequest,
+    HealthState,
     ListGPUsRequest,
     Operation,
     Tensor,
@@ -36,6 +38,136 @@ def test_service_health():
     resp = servicer.GetHealth(HealthRequest(), mock_context)
     assert resp.status == "ok"
     assert resp.worker_id == "worker-node-1"
+    assert resp.hostname == state.hostname
+    assert resp.last_heartbeat > 0
+
+
+def test_service_health_healthy():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "device_count", return_value=1),
+        patch.object(gpu, "get_status", return_value={"temp": 55}),
+        patch.object(gpu, "get_cuda_version", return_value="12.2"),
+        patch.object(gpu, "get_driver_version", return_value="535.104"),
+        patch.object(executor, "is_gpu_ready", return_value=True),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetHealth(HealthRequest(), mock_context)
+        assert resp.status == "ok"
+        assert resp.worker_id == "worker-node-1"
+        assert resp.health_state == HealthState.HEALTHY
+        assert resp.gpu_available is True
+        assert resp.cuda_version == "12.2"
+        assert resp.driver_version == "535.104"
+        assert resp.hostname == state.hostname
+        assert resp.last_heartbeat > 0
+        assert resp.active_tasks == 0
+        assert resp.gpu_count == 1
+        assert "operational" in resp.health_details
+
+
+def test_service_health_degraded_cupy_missing():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "device_count", return_value=1),
+        patch.object(executor, "is_gpu_ready", return_value=False),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetHealth(HealthRequest(), mock_context)
+        assert resp.health_state == HealthState.DEGRADED
+        assert "CuPy" in resp.health_details
+
+
+def test_service_health_degraded_high_temp():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "device_count", return_value=1),
+        patch.object(gpu, "get_status", return_value={"temp": 90}),
+        patch.object(executor, "is_gpu_ready", return_value=True),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetHealth(HealthRequest(), mock_context)
+        assert resp.health_state == HealthState.DEGRADED
+        assert "temperature high" in resp.health_details
+
+
+def test_service_health_unavailable():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    with (
+        patch.object(gpu, "is_available", return_value=False),
+        patch.object(executor, "is_gpu_ready", return_value=False),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetHealth(HealthRequest(), mock_context)
+        assert resp.health_state == HealthState.UNAVAILABLE
+        assert resp.gpu_available is False
+
+
+def test_service_gpu_status_telemetry():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    mock_status = {
+        "device_index": 0,
+        "gpu_util": 45,
+        "mem_util": 30,
+        "total_vram": 8000000000,
+        "free_vram": 5000000000,
+        "used_vram": 3000000000,
+        "temp": 62,
+        "power_usage_w": 95,
+        "power_limit_w": 220,
+        "available": True,
+    }
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "get_status", return_value=mock_status),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetGPUStatus(GPUStatusRequest(device_index=0), mock_context)
+        assert resp.device_index == 0
+        assert resp.gpu_utilization_pct == 45
+        assert resp.temperature_c == 62
+        assert resp.power_usage_w == 95
+        assert resp.power_limit_w == 220
+        assert resp.available is True
+        assert resp.current_workload == "IDLE"
+
+
+def test_worker_state_workload_and_heartbeat():
+    state = WorkerState("worker-1")
+    assert state.get_device_workload(0) == "IDLE"
+    hb1 = state.last_heartbeat
+
+    state.increment_tasks(0, "Compute:matmul")
+    assert state.active_tasks == 1
+    assert state.get_device_workload(0) == "Compute:matmul"
+    assert state.last_heartbeat >= hb1
+
+    state.decrement_tasks(0)
+    assert state.active_tasks == 0
+    assert state.get_device_workload(0) == "IDLE"
 
 
 def test_service_gpu_info():
@@ -166,6 +298,7 @@ def test_service_list_gpus():
         "temp": 52,
     }
     with (
+        patch.object(servicer.gpu, "is_available", return_value=True),
         patch.object(servicer.gpu, "list_devices", return_value=[device]),
         patch.object(servicer.executor, "is_gpu_ready", return_value=False),
     ):
@@ -173,9 +306,14 @@ def test_service_list_gpus():
     assert resp.worker_id == "worker-node-1"
     assert resp.driver_version == "610.57.04"
     assert resp.compute_ready is False
+    assert resp.health_state == HealthState.DEGRADED
+    assert resp.hostname == servicer.state.hostname
+    assert resp.last_heartbeat > 0
     assert len(resp.gpus) == 1
     assert resp.gpus[0].name == "NVIDIA RTX 3050"
     assert resp.gpus[0].free_vram_bytes == 3 * 1024**3
+    assert resp.gpus[0].available is True
+    assert resp.gpus[0].current_workload == "IDLE"
 
 
 def test_service_list_gpus_without_gpus():
@@ -217,3 +355,26 @@ def test_service_run_benchmark_out_of_memory():
             )
     assert exc.value.code == grpc.StatusCode.RESOURCE_EXHAUSTED
     assert servicer.state.active_tasks == 0
+
+
+def test_state_multi_device_task_tracking():
+    from worker.state import WorkerState
+
+    state = WorkerState("test-worker")
+    state.increment_tasks(device_index=0, workload="vector_add")
+    state.increment_tasks(device_index=1, workload="matmul")
+    assert state.active_tasks == 2
+    assert state.get_device_workload(0) == "vector_add"
+    assert state.get_device_workload(1) == "matmul"
+
+    # Device 0 finishes first
+    state.decrement_tasks(device_index=0)
+    assert state.active_tasks == 1
+    assert state.get_device_workload(0) == "IDLE"
+    assert state.get_device_workload(1) == "matmul"
+
+    # Device 1 finishes
+    state.decrement_tasks(device_index=1)
+    assert state.active_tasks == 0
+    assert state.get_device_workload(0) == "IDLE"
+    assert state.get_device_workload(1) == "IDLE"
