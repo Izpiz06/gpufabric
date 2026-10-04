@@ -20,9 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_init = sub.add_parser("init", help="Create a CA plus worker and client certificates")
     p_init.add_argument(
         "--hosts",
-        required=True,
+        default=None,
         help="Comma-separated IPs/hostnames clients use to reach the worker, "
-        "e.g. 192.168.1.50,gpu-box",
+        "e.g. 192.168.1.50,gpu-box (default: auto-detect local network addresses)",
     )
     p_init.add_argument("--dir", type=Path, default=None, help="Output directory")
     p_init.add_argument("--force", action="store_true", help="Replace an existing CA")
@@ -38,8 +38,15 @@ def main(argv=None) -> int:
     tls_dir = args.dir or default_tls_dir()
     try:
         if args.command == "init":
-            init_tls_dir(tls_dir, args.hosts.split(","), force=args.force)
-            print(f"Created CA, worker and client certificates in {tls_dir}\n")
+            raw_hosts = args.hosts.split(",") if args.hosts is not None else None
+            used_hosts = init_tls_dir(tls_dir, raw_hosts, force=args.force)
+            if args.hosts is not None:
+                print("Using specified worker host addresses for certificate SANs:")
+            else:
+                print("Automatically detected worker host addresses for certificate SANs:")
+            for h in used_hosts:
+                print(f"  • {h}")
+            print(f"\nCreated CA, worker and client certificates in {tls_dir}\n")
             print("Worker machine: start the worker with this directory (the default).")
             print("This machine can also act as a client right away.")
             print("For another client machine: gpufabric-certs add-client <name>")

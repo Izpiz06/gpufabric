@@ -16,8 +16,9 @@ Layout of a TLS directory (default ~/.config/gpufabric/tls):
 import datetime
 import ipaddress
 import os
+import socket
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 import grpc
 from cryptography import x509
@@ -28,6 +29,25 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 TLS_DIR_ENV = "GPUFABRIC_TLS_DIR"
 CERT_VALIDITY_DAYS = 825
 CA_VALIDITY_DAYS = 3650
+
+try:
+    import ifaddr
+except ImportError:
+    ifaddr = None
+
+# Interface name prefixes that typically represent virtual/bridge/container networks
+VIRTUAL_IFACE_PREFIXES = (
+    "docker",
+    "br-",
+    "veth",
+    "virbr",
+    "tun",
+    "tap",
+    "vboxnet",
+    "vmnet",
+    "flannel",
+    "cni",
+)
 
 
 class TLSConfigError(Exception):
@@ -40,6 +60,99 @@ def default_tls_dir() -> Path:
         return Path(os.environ[TLS_DIR_ENV]).expanduser()
     config_home = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
     return Path(config_home) / "gpufabric" / "tls"
+
+
+def detect_host_addresses(
+    include_localhost: bool = True,
+    include_hostname: bool = True,
+) -> List[str]:
+    """Automatically detect network addresses and hostnames for worker certificate SANs.
+
+    Detects:
+    - Localhost & loopback addresses (127.0.0.1, ::1, localhost)
+    - System hostname, FQDN, and .local alias
+    - Active primary outbound IPv4 routing address
+    - Physical network adapter IPv4/IPv6 addresses (ignoring virtual/docker/bridge adapters)
+    """
+    candidates: List[str] = []
+
+    if include_localhost:
+        candidates.extend(["127.0.0.1", "::1", "localhost"])
+
+    if include_hostname:
+        try:
+            h = socket.gethostname()
+            if h:
+                candidates.append(h)
+                if "." not in h:
+                    candidates.append(f"{h}.local")
+        except Exception:
+            pass
+        try:
+            fqdn = socket.getfqdn()
+            if fqdn:
+                candidates.append(fqdn)
+        except Exception:
+            pass
+
+    # Primary outbound routing IPv4 address
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                candidates.append(ip)
+    except Exception:
+        pass
+
+    # Inspect network interfaces
+    if ifaddr is not None:
+        try:
+            for adapter in ifaddr.get_adapters():
+                name = adapter.name.lower()
+                if any(name.startswith(p) for p in VIRTUAL_IFACE_PREFIXES):
+                    continue
+                for ip_obj in adapter.ips:
+                    ip = ip_obj.ip
+                    if isinstance(ip, str):
+                        if not ip.startswith("127."):
+                            candidates.append(ip)
+                    elif isinstance(ip, tuple) and len(ip) >= 1:
+                        ip_str = ip[0]
+                        # Exclude link-local (fe80::) and loopback (::1)
+                        if not ip_str.lower().startswith("fe80") and ip_str != "::1":
+                            candidates.append(ip_str)
+        except Exception:
+            pass
+    else:
+        try:
+            _, _, ips = socket.gethostbyname_ex(socket.gethostname())
+            for ip in ips:
+                if not ip.startswith("127."):
+                    candidates.append(ip)
+        except Exception:
+            pass
+
+    # Deduplicate while preserving order and validating syntax
+    seen = set()
+    results: List[str] = []
+    for host in candidates:
+        host = host.strip()
+        if not host or host in seen:
+            continue
+        try:
+            ipaddress.ip_address(host)
+            seen.add(host)
+            results.append(host)
+        except ValueError:
+            try:
+                x509.DNSName(host)
+                seen.add(host)
+                results.append(host)
+            except ValueError:
+                pass
+
+    return results
 
 
 def _new_key() -> ec.EllipticCurvePrivateKey:
@@ -108,14 +221,25 @@ def _issue(
     return key, builder.sign(ca_key, hashes.SHA256())
 
 
-def init_tls_dir(out_dir: Path, hosts: Iterable[str], force: bool = False) -> None:
+def init_tls_dir(
+    out_dir: Path,
+    hosts: Optional[Iterable[str]] = None,
+    force: bool = False,
+) -> List[str]:
     """Create a CA plus server and client certificates in out_dir.
 
     `hosts` are the worker's IP addresses and/or hostnames, exactly as
-    clients will dial them. TLS checks the address against the certificate.
+    clients will dial them. If None, host addresses are automatically detected.
+    TLS checks the address against the certificate.
+
+    Returns the list of hostnames and IP addresses included in the server certificate.
     """
-    hosts = [h.strip() for h in hosts if h.strip()]
-    if not hosts:
+    if hosts is None:
+        san_hosts = detect_host_addresses()
+    else:
+        san_hosts = [h.strip() for h in hosts if h.strip()]
+
+    if not san_hosts:
         raise TLSConfigError("At least one worker IP or hostname is required (--hosts)")
     out_dir = Path(out_dir)
     if (out_dir / "ca.key").exists() and not force:
@@ -154,12 +278,17 @@ def init_tls_dir(out_dir: Path, hosts: Iterable[str], force: bool = False) -> No
     _write_cert(out_dir / "ca.crt", ca_cert)
 
     server_key, server_cert = _issue(
-        ca_key, ca_cert, hosts[0], ExtendedKeyUsageOID.SERVER_AUTH, hosts
+        ca_key,
+        ca_cert,
+        san_hosts[0],
+        ExtendedKeyUsageOID.SERVER_AUTH,
+        san_hosts,
     )
     _write_key(out_dir / "server.key", server_key)
     _write_cert(out_dir / "server.crt", server_cert)
 
     issue_client_cert(out_dir, "client", out_dir)
+    return san_hosts
 
 
 def issue_client_cert(ca_dir: Path, name: str, out_dir: Path) -> Path:
