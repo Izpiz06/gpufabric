@@ -99,8 +99,12 @@ class WorkerTable(Widget):
             if w.status == "ONLINE":
                 if w.health_state in ("DEGRADED", 2, "2"):
                     status_text = Text("▲ DEGRADED", style="bold yellow")
-                else:
+                elif w.health_state in ("UNAVAILABLE", 3, "3"):
+                    status_text = Text("✖ UNAVAIL", style="bold red")
+                elif w.health_state in ("HEALTHY", 1, "1"):
                     status_text = Text("● HEALTHY", style="bold green")
+                else:
+                    status_text = Text("● ONLINE", style="bold green")
             elif w.status == "CONNECTING":
                 status_text = Text("◌ SYNCING", style="bold cyan")
             else:

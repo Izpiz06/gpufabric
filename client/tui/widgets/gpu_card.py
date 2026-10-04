@@ -333,11 +333,14 @@ class GPUCard(Widget):
                 wl_text = Text(f"⚡ {workload}", style="bold cyan")
             self.query_one("#workload-text", Label).update(wl_text)
 
-            av_text = (
-                Text("✓ Ready", style="bold green")
-                if available
-                else Text("✗ Busy", style="bold red")
-            )
+            if status is not None:
+                av_text = (
+                    Text("✓ Ready", style="bold green")
+                    if available
+                    else Text("✗ Busy", style="bold red")
+                )
+            else:
+                av_text = Text("◌ Syncing", style="dim cyan")
             self.query_one("#avail-text", Label).update(av_text)
         except Exception:
             pass
