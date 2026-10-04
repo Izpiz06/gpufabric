@@ -35,9 +35,9 @@ def main(argv=None) -> int:
     tls_dir = args.dir or default_tls_dir()
     try:
         if args.command == "init":
-            raw_hosts = args.hosts.split(",") if args.hosts else None
+            raw_hosts = args.hosts.split(",") if args.hosts is not None else None
             used_hosts = init_tls_dir(tls_dir, raw_hosts, force=args.force)
-            if args.hosts:
+            if args.hosts is not None:
                 print("Using specified worker host addresses for certificate SANs:")
             else:
                 print("Automatically detected worker host addresses for certificate SANs:")

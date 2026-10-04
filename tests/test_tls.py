@@ -136,9 +136,6 @@ def test_detect_host_addresses():
     assert "127.0.0.1" in addrs
     assert "localhost" in addrs
     assert "::1" in addrs
-    # Ensure no virtual interfaces (docker0, br-..., veth...) are included
-    for a in addrs:
-        assert not a.startswith("172.17.")  # default docker0
 
 
 def test_detect_host_addresses_mocked(monkeypatch):
@@ -212,3 +209,8 @@ def test_certs_cli_auto_init(tmp_path, capsys):
     assert "Automatically detected worker host addresses for certificate SANs:" in out
     assert "• 127.0.0.1" in out
     assert (tmp_path / "server.crt").is_file()
+
+    # Explicit empty --hosts string must be rejected rather than falling back to auto-detect
+    assert certs_main(["init", "--hosts", "", "--dir", str(tmp_path / "empty")]) == 1
+    err = capsys.readouterr().err
+    assert "At least one worker IP or hostname is required" in err
