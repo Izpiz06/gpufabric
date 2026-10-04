@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Main Textual Application for GPU Fabric TUI."""
 
 from pathlib import Path

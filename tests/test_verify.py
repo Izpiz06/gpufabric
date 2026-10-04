@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for client-side result verification helpers."""
 
 import numpy as np

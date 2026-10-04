@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """`gpufabric-certs`: create the certificates for mutual TLS."""
 
 import argparse

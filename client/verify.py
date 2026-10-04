@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """Reference results and error checks for verifying remote GPU output."""
 
 import numpy as np

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """End-to-end tests against a real worker GPU over gRPC.
 
 These run only when GPUFABRIC_WORKER points at a running worker, e.g.

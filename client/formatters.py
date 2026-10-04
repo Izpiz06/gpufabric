@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Rich UI formatters for client CLI outputs."""
 
 from rich.console import Console

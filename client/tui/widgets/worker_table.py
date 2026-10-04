@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Worker table widget for GPU Fabric TUI."""
 
 from dataclasses import dataclass

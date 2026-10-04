@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """Regenerate protobuf and gRPC Python code from proto/gpufabric.proto.
 
 Usage:

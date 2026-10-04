@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Unit tests for GPU Fabric Terminal User Interface (TUI)."""
 
 import asyncio

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """LAN service discovery and advertisement using mDNS / DNS-SD (Zeroconf)."""
 
 import logging

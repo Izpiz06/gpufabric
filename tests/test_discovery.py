@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for LAN service discovery (mDNS / Zeroconf) and worker advertisement."""
 
 from unittest.mock import MagicMock, patch

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """gRPC worker server initialization and lifecycle runner."""
 
 import argparse

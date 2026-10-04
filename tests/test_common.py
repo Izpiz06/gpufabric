@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Tests for common utilities and protobuf models."""
 
 import pytest
@@ -65,3 +68,9 @@ def test_message_size_options():
 def test_message_size_options_rejects_out_of_range(bad):
     with pytest.raises(ValueError):
         message_size_options(bad)
+
+
+def test_copyright_headers_compliance():
+    from scripts.check_headers import main as check_headers_main
+
+    assert check_headers_main() == 0

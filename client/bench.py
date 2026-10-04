@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """Benchmark checks: run benchmarks on a worker and judge them pass/fail."""
 
 import math

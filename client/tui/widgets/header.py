@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """Header and summary metrics widget for GPU Fabric TUI."""
 
 from rich.text import Text

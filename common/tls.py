@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Shreyas Mene
+# SPDX-License-Identifier: Apache-2.0
+
 """Mutual TLS: certificate generation and gRPC credentials.
 
 Layout of a TLS directory (default ~/.config/gpufabric/tls):

@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Mohammad Izaan
+# SPDX-License-Identifier: Apache-2.0
+
 """GPU card and live telemetry widget for GPU Fabric TUI."""
 
 from typing import Any, Dict, List, Optional
