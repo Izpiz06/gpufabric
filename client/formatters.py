@@ -22,9 +22,7 @@ def print_health(target: str, info: HealthResponse):
         HealthState.DEGRADED: "[bold yellow]DEGRADED[/bold yellow]",
         HealthState.UNAVAILABLE: "[bold red]UNAVAILABLE[/bold red]",
     }
-    state_badge = state_map.get(
-        info.health_state, f"[green]{info.status.upper()}[/green]"
-    )
+    state_badge = state_map.get(info.health_state, f"[green]{info.status.upper()}[/green]")
     status_fmt = (
         f"[green]{info.status.upper()}[/green]"
         if info.status == "ok"
