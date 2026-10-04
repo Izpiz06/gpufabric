@@ -30,6 +30,9 @@ jobs:
       - name: Check Code Formatting
         run: ruff format --check .
 
+      - name: Check Copyright & License Headers
+        run: python scripts/check_headers.py
+
   proto:
     name: Generated Code In Sync
     runs-on: ubuntu-latest
