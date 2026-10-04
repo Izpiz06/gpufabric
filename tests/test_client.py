@@ -42,9 +42,39 @@ def test_client_health_and_discover(grpc_server):
         health = client.health()
         assert health.status == "ok"
         assert health.worker_id == "test-worker-e2e"
+        assert health.hostname != ""
+        assert health.last_heartbeat > 0
 
         disc = client.discover()
         assert disc.worker_id == "test-worker-e2e"
+
+
+def test_client_gpu_status_telemetry(grpc_server):
+    port, _, gpu, _ = grpc_server
+    mock_status = {
+        "device_index": 0,
+        "gpu_util": 25,
+        "mem_util": 15,
+        "total_vram": 8000000000,
+        "free_vram": 6000000000,
+        "used_vram": 2000000000,
+        "temp": 58,
+        "power_usage_w": 85,
+        "power_limit_w": 250,
+        "available": True,
+    }
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "get_status", return_value=mock_status),
+    ):
+        with GPUFabricClient(host="127.0.0.1", port=port, insecure=True) as client:
+            status = client.get_status(device_index=0)
+            assert status.gpu_utilization_pct == 25
+            assert status.temperature_c == 58
+            assert status.power_usage_w == 85
+            assert status.power_limit_w == 250
+            assert status.available is True
+            assert status.current_workload == "IDLE"
 
 
 def test_client_gpu_info(grpc_server):

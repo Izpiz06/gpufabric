@@ -13,6 +13,7 @@ from client.commands import (
     cmd_discover,
     cmd_execute,
     cmd_gpu,
+    cmd_health,
     cmd_ls,
     cmd_status,
 )
@@ -65,6 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional IP or hostname of worker (omit to scan LAN automatically)",
     )
+
+    p_health = sub.add_parser("health", help="Query worker health and monitoring status")
+    p_health.add_argument("worker_ip", type=str, help="IP or hostname of worker")
 
     p_gpu = sub.add_parser("gpu", help="Query GPU info")
     p_gpu.add_argument("worker_ip", type=str, help="IP or hostname of worker")
@@ -176,6 +180,8 @@ def main():
         try:
             if args.command == "discover":
                 cmd_discover(client, args)
+            elif args.command == "health":
+                cmd_health(client, args)
             elif args.command == "gpu":
                 cmd_gpu(client, args)
             elif args.command == "status":

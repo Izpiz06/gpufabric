@@ -27,6 +27,12 @@ from common.gpufabric_pb2 import ListGPUsResponse
 WORKERS_ENV = "GPUFABRIC_WORKERS"
 
 
+def cmd_health(client: GPUFabricClient, args):
+    with console.status("[bold green]Checking worker health..."):
+        info = client.health()
+    print_health(client.target, info)
+
+
 def cmd_discover_explicit(client: GPUFabricClient, args):
     with console.status("[bold green]Connecting to worker..."):
         info = client.discover()

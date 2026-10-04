@@ -23,6 +23,7 @@ from common.gpufabric_pb2 import (
     GPUStatusResponse,
     HealthRequest,
     HealthResponse,
+    HealthState,
     WorkloadType,
 )
 from common.gpufabric_pb2_grpc import (
@@ -44,6 +45,7 @@ __all__ = [
     "get_local_ip_addresses",
     "HealthRequest",
     "HealthResponse",
+    "HealthState",
     "GPUInfoRequest",
     "GPUInfoResponse",
     "GPUStatusRequest",

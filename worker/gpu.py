@@ -75,6 +75,26 @@ class GPUManager:
             return 0.0
         return clock_mhz * 1e6 * 2 * bus_bits / 8 / 1e9
 
+    def get_cuda_version(self) -> str:
+        """System CUDA driver version formatted as X.Y (e.g. '12.2'), or empty string."""
+        if not self.is_available():
+            return ""
+        try:
+            raw = pynvml.nvmlSystemGetCudaDriverVersion()
+            return f"{raw // 1000}.{(raw % 1000) // 10}"
+        except Exception:
+            return ""
+
+    def get_driver_version(self) -> str:
+        """NVIDIA driver version string, or empty string."""
+        if not self.is_available():
+            return ""
+        try:
+            drv = pynvml.nvmlSystemGetDriverVersion()
+            return drv.decode("utf-8") if isinstance(drv, bytes) else str(drv)
+        except Exception:
+            return ""
+
     def get_info(self, device_index: int = 0) -> Dict[str, Any]:
         """Fetch static GPU device specs."""
         if not self.is_available():
@@ -93,12 +113,7 @@ class GPUManager:
         except Exception:
             pass
 
-        driver = ""
-        try:
-            drv = pynvml.nvmlSystemGetDriverVersion()
-            driver = drv.decode("utf-8") if isinstance(drv, bytes) else str(drv)
-        except Exception:
-            pass
+        driver = self.get_driver_version()
 
         return {
             "device_index": device_index,
@@ -111,7 +126,7 @@ class GPUManager:
         }
 
     def get_status(self, device_index: int = 0) -> Dict[str, Any]:
-        """Fetch dynamic GPU load and temperature."""
+        """Fetch dynamic GPU load, temperature, and power telemetry."""
         if not self.is_available():
             raise RuntimeError("GPU or NVML driver is unavailable.")
 
@@ -131,6 +146,23 @@ class GPUManager:
         except Exception:
             pass
 
+        power_w = 0
+        try:
+            power_w = int(pynvml.nvmlDeviceGetPowerUsage(handle) / 1000)
+        except Exception:
+            pass
+
+        power_limit_w = 0
+        try:
+            limit_mw = 0
+            try:
+                limit_mw = pynvml.nvmlDeviceGetEnforcedPowerLimit(handle)
+            except Exception:
+                limit_mw = pynvml.nvmlDeviceGetPowerManagementLimit(handle)
+            power_limit_w = int(limit_mw / 1000)
+        except Exception:
+            pass
+
         return {
             "device_index": device_index,
             "gpu_util": gpu_util,
@@ -139,6 +171,9 @@ class GPUManager:
             "free_vram": mem.free,
             "used_vram": mem.used,
             "temp": temp,
+            "power_usage_w": power_w,
+            "power_limit_w": power_limit_w,
+            "available": True,
         }
 
     def shutdown(self):

@@ -15,6 +15,7 @@ from common.gpufabric_pb2 import (
     GPUInfoResponse,
     GPUStatusResponse,
     HealthResponse,
+    HealthState,
     ListGPUsResponse,
     Operation,
     WorkloadType,
@@ -53,13 +54,61 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         self.gpu = gpu_manager
         self.executor = gpu_executor
 
+    def _evaluate_health(self) -> tuple[int, str]:
+        nvml_avail = self.gpu.is_available()
+        cupy_ready = self.executor.is_gpu_ready()
+
+        if not nvml_avail and not cupy_ready:
+            return HealthState.UNAVAILABLE, "No GPU hardware or compute backend available."
+
+        if nvml_avail and not cupy_ready:
+            return (
+                HealthState.DEGRADED,
+                "GPU hardware detected by NVML, but CuPy compute backend is unavailable.",
+            )
+
+        if not nvml_avail and cupy_ready:
+            return HealthState.DEGRADED, "Compute backend ready, but NVML telemetry is unavailable."
+
+        try:
+            count = self.gpu.device_count()
+            if count == 0:
+                return HealthState.UNAVAILABLE, "No GPU devices found."
+            for i in range(count):
+                status = self.gpu.get_status(i)
+                temp = status.get("temp", 0)
+                if temp >= 85:
+                    return HealthState.DEGRADED, f"GPU {i} temperature high ({temp}°C)."
+            return HealthState.HEALTHY, "All GPU systems operational."
+        except Exception as e:
+            return HealthState.DEGRADED, f"GPU telemetry error: {e}"
+
     def GetHealth(self, request, context) -> HealthResponse:
-        gpu_ready = self.gpu.is_available() or self.executor.is_gpu_ready()
+        self.state.heartbeat()
+        state, details = self._evaluate_health()
+        gpu_ready = state != HealthState.UNAVAILABLE
+        cuda_ver = self.gpu.get_cuda_version()
+        driver_ver = self.gpu.get_driver_version()
+        gpu_count = (
+            self.gpu.device_count()
+            if self.gpu.is_available()
+            else (self.executor.device_count if self.executor.is_gpu_ready() else 0)
+        )
+
         return HealthResponse(
             status="ok",
             worker_id=self.state.worker_id,
             version=API_VERSION,
             gpu_available=gpu_ready,
+            health_state=state,
+            hostname=self.state.hostname,
+            api_version=API_VERSION,
+            cuda_version=cuda_ver,
+            driver_version=driver_ver,
+            last_heartbeat=self.state.last_heartbeat,
+            health_details=details,
+            active_tasks=self.state.active_tasks,
+            gpu_count=gpu_count,
         )
 
     def GetGPUInfo(self, request, context) -> GPUInfoResponse:
@@ -90,7 +139,9 @@ class GPUFabricServicer(GPUFabricServiceServicer):
                 grpc.StatusCode.UNAVAILABLE, "No GPU or NVML driver found on this worker."
             )
         try:
+            self.state.heartbeat()
             s = self.gpu.get_status(request.device_index)
+            workload = self.state.get_device_workload(request.device_index)
             return GPUStatusResponse(
                 device_index=s["device_index"],
                 gpu_utilization_pct=s["gpu_util"],
@@ -102,6 +153,10 @@ class GPUFabricServicer(GPUFabricServiceServicer):
                 used_vram_human=bytes_to_human(s["used_vram"]),
                 temperature_c=s["temp"],
                 active_tasks=self.state.active_tasks,
+                power_usage_w=s.get("power_usage_w", 0),
+                power_limit_w=s.get("power_limit_w", 0),
+                available=s.get("available", True),
+                current_workload=workload,
             )
         except Exception as e:
             context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(e))
@@ -120,7 +175,7 @@ class GPUFabricServicer(GPUFabricServiceServicer):
                 f"Vector size mismatch: len(a)={len(request.a)} != len(b)={len(request.b)}",
             )
 
-        self.state.increment_tasks()
+        self.state.increment_tasks(request.device_index, "vector_add")
         try:
             res, elapsed_ms, backend = self.executor.execute_vector_add(
                 list(request.a), list(request.b), request.device_index
@@ -140,11 +195,11 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         except Exception as e:
             context.abort(grpc.StatusCode.INTERNAL, f"Workload execution failed: {e}")
         finally:
-            self.state.decrement_tasks()
+            self.state.decrement_tasks(request.device_index)
 
-    def _run_gpu_task(self, context, label, fn):
+    def _run_gpu_task(self, context, label, fn, device_index: int = 0):
         """Run fn() as an active task and map executor errors to gRPC codes."""
-        self.state.increment_tasks()
+        self.state.increment_tasks(device_index, label)
         try:
             return fn()
         except ValueError as e:
@@ -156,7 +211,7 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         except Exception as e:
             context.abort(grpc.StatusCode.INTERNAL, f"{label} failed: {e}")
         finally:
-            self.state.decrement_tasks()
+            self.state.decrement_tasks(device_index)
 
     def Compute(self, request, context) -> ComputeResponse:
         op = _OPERATIONS.get(request.op)
@@ -169,7 +224,10 @@ class GPUFabricServicer(GPUFabricServiceServicer):
 
         task_id = str(uuid.uuid4())
         result, gpu_ms, total_ms = self._run_gpu_task(
-            context, "Compute", lambda: self.executor.compute(op, inputs, request.device_index)
+            context,
+            f"Compute:{op}",
+            lambda: self.executor.compute(op, inputs, request.device_index),
+            device_index=request.device_index,
         )
         return ComputeResponse(
             task_id=task_id,
@@ -180,27 +238,47 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         )
 
     def ListGPUs(self, request, context) -> ListGPUsResponse:
+        self.state.heartbeat()
         try:
             devices = self.gpu.list_devices()
         except Exception as e:
             context.abort(grpc.StatusCode.INTERNAL, f"Failed to query GPUs: {e}")
-        return ListGPUsResponse(
-            worker_id=self.state.worker_id,
-            version=API_VERSION,
-            driver_version=devices[0]["driver_version"] if devices else "",
-            compute_ready=self.executor.is_gpu_ready(),
-            gpus=[
+
+        state, _ = self._evaluate_health()
+        cuda_ver = self.gpu.get_cuda_version()
+        driver_ver = devices[0]["driver_version"] if devices else ""
+
+        gpus = []
+        for d in devices:
+            dev_idx = d["device_index"]
+            workload = self.state.get_device_workload(dev_idx)
+            gpus.append(
                 GPUDevice(
-                    device_index=d["device_index"],
+                    device_index=dev_idx,
                     name=d["name"],
                     total_vram_bytes=d["total_vram"],
                     free_vram_bytes=d["free_vram"],
                     compute_capability=d["compute_capability"],
                     gpu_utilization_pct=d["gpu_util"],
                     temperature_c=d["temp"],
+                    power_usage_w=d.get("power_usage_w", 0),
+                    power_limit_w=d.get("power_limit_w", 0),
+                    memory_utilization_pct=d.get("mem_util", 0),
+                    available=d.get("available", True),
+                    current_workload=workload,
                 )
-                for d in devices
-            ],
+            )
+
+        return ListGPUsResponse(
+            worker_id=self.state.worker_id,
+            version=API_VERSION,
+            driver_version=driver_ver,
+            compute_ready=self.executor.is_gpu_ready(),
+            gpus=gpus,
+            health_state=state,
+            cuda_version=cuda_ver,
+            hostname=self.state.hostname,
+            last_heartbeat=self.state.last_heartbeat,
         )
 
     def RunBenchmark(self, request, context) -> BenchmarkResponse:
@@ -212,8 +290,9 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         repeats = request.repeats or DEFAULT_BENCHMARK_REPEATS
         r = self._run_gpu_task(
             context,
-            "Benchmark",
+            f"Benchmark:{name}",
             lambda: self.executor.run_benchmark(name, request.size, request.device_index, repeats),
+            device_index=request.device_index,
         )
         peak = self.gpu.peak_memory_bandwidth(request.device_index) if name == "triad" else 0.0
         return BenchmarkResponse(
