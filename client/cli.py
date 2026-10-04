@@ -11,6 +11,7 @@ from client.commands import (
     cmd_bench,
     cmd_compute,
     cmd_discover,
+    cmd_enroll,
     cmd_execute,
     cmd_gpu,
     cmd_health,
@@ -18,7 +19,12 @@ from client.commands import (
     cmd_status,
 )
 from client.formatters import console
-from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
+from common.constants import (
+    DEFAULT_ENROLL_PORT,
+    DEFAULT_MAX_MESSAGE_MB,
+    DEFAULT_PORT,
+    MAX_MESSAGE_MB_LIMIT,
+)
 from common.tls import default_tls_dir
 
 
@@ -135,6 +141,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also double the triad size until GPU memory runs out",
     )
 
+    p_enroll = sub.add_parser(
+        "enroll",
+        help="Enroll this client with a worker node using a short-lived authorization token",
+    )
+    p_enroll.add_argument("worker_ip", type=str, help="IP or hostname of worker")
+    p_enroll.add_argument(
+        "--token", type=str, required=True, help="Authorization token generated on worker"
+    )
+    p_enroll.add_argument(
+        "--name", type=str, default=None, help="Client name (default: local hostname)"
+    )
+    p_enroll.add_argument(
+        "--enroll-port",
+        type=int,
+        default=DEFAULT_ENROLL_PORT,
+        help=f"Enrollment port on worker (default: {DEFAULT_ENROLL_PORT})",
+    )
+    p_enroll.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing client certificates in tls directory",
+    )
+
     return p
 
 
@@ -165,6 +194,9 @@ def main():
         "insecure": args.insecure,
     }
     try:
+        if args.command == "enroll":
+            cmd_enroll(args, client_kwargs=client_kwargs)
+            return
         if args.command == "ls":
             cmd_ls(args, client_kwargs)
             return

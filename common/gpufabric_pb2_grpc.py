@@ -359,3 +359,87 @@ class GPUFabricService:
             timeout,
             metadata,
             _registered_method=True)
+
+
+class EnrollmentServiceStub:
+    """---------------------------------------------------------------------------
+    Client Enrollment Service
+    ---------------------------------------------------------------------------
+
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.Enroll = channel.unary_unary(
+                '/gpufabric.EnrollmentService/Enroll',
+                request_serializer=common_dot_gpufabric__pb2.EnrollRequest.SerializeToString,
+                response_deserializer=common_dot_gpufabric__pb2.EnrollResponse.FromString,
+                _registered_method=True)
+
+
+class EnrollmentServiceServicer:
+    """---------------------------------------------------------------------------
+    Client Enrollment Service
+    ---------------------------------------------------------------------------
+
+    """
+
+    def Enroll(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_EnrollmentServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'Enroll': grpc.unary_unary_rpc_method_handler(
+                    servicer.Enroll,
+                    request_deserializer=common_dot_gpufabric__pb2.EnrollRequest.FromString,
+                    response_serializer=common_dot_gpufabric__pb2.EnrollResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'gpufabric.EnrollmentService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('gpufabric.EnrollmentService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class EnrollmentService:
+    """---------------------------------------------------------------------------
+    Client Enrollment Service
+    ---------------------------------------------------------------------------
+
+    """
+
+    @staticmethod
+    def Enroll(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/gpufabric.EnrollmentService/Enroll',
+            common_dot_gpufabric__pb2.EnrollRequest.SerializeToString,
+            common_dot_gpufabric__pb2.EnrollResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
