@@ -263,3 +263,58 @@ def test_benchmark_modal_interaction():
             assert res_text is not None
 
     asyncio.run(_test())
+
+
+def test_tui_power_and_workload_telemetry():
+    """Test updating power draw and active workload on GPUCard."""
+
+    async def _test():
+        app = GPUFabricApp(
+            seed_workers=["192.168.1.50:50051"],
+            auto_discover_on_mount=False,
+        )
+        async with app.run_test():
+            resp = _make_mock_gpu_response("worker-alpha", gpus_count=1)
+            app._handle_refresh_results({"192.168.1.50:50051": (resp, None)})
+
+            status = GPUStatusResponse(
+                device_index=0,
+                gpu_utilization_pct=50,
+                memory_utilization_pct=40,
+                total_vram_bytes=24_000_000_000,
+                free_vram_bytes=12_000_000_000,
+                used_vram_bytes=12_000_000_000,
+                temperature_c=65,
+                active_tasks=1,
+                power_usage_w=120,
+                power_limit_w=300,
+                available=True,
+                current_workload="Compute:matmul",
+            )
+            app._update_gpu_card_status("192.168.1.50:50051", status)
+
+            assert "120 W / 300 W" in str(app.query_one("#power-text", Label).render())
+            assert "Compute:matmul" in str(app.query_one("#workload-text", Label).render())
+            assert "Ready" in str(app.query_one("#avail-text", Label).render())
+
+    asyncio.run(_test())
+
+
+def test_tui_degraded_worker_badge():
+    """Test worker table displaying degraded status badge."""
+
+    async def _test():
+        app = GPUFabricApp(
+            seed_workers=["192.168.1.50:50051"],
+            auto_discover_on_mount=False,
+        )
+        async with app.run_test():
+            resp = _make_mock_gpu_response("worker-alpha", gpus_count=1)
+            resp.health_state = 2  # DEGRADED
+            app._handle_refresh_results({"192.168.1.50:50051": (resp, None)})
+
+            table = app.query_one(WorkerTable)
+            entry = table.worker_entries["192.168.1.50:50051"]
+            assert entry.health_state == 2
+
+    asyncio.run(_test())

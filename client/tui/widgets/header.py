@@ -17,14 +17,15 @@ class GPUFabricHeader(Widget):
         height: 3;
         background: $surface;
         color: $text;
-        border-bottom: heavy $accent;
+        border-bottom: solid $primary;
         padding: 0 1;
     }
     .header-title {
         text-style: bold;
-        color: $accent;
-        width: 22;
+        color: $accent-lighten-2;
+        width: 24;
         padding: 0 1;
+        align: left middle;
     }
     .metrics-bar {
         align: right middle;
@@ -36,6 +37,7 @@ class GPUFabricHeader(Widget):
         padding: 0 1;
         background: $panel;
         color: $text;
+        border: solid $panel-lighten-1;
     }
     .status-badge {
         margin-left: 1;
@@ -51,7 +53,7 @@ class GPUFabricHeader(Widget):
 
     def compose(self) -> ComposeResult:
         with Horizontal():
-            yield Static("⚡ GPU FABRIC", classes="header-title")
+            yield Static("◆ GPU FABRIC", classes="header-title")
             with Horizontal(classes="metrics-bar"):
                 yield Label(id="workers-metric", classes="metric-badge")
                 yield Label(id="gpus-metric", classes="metric-badge")

@@ -19,6 +19,9 @@ class WorkerEntry:
     gpu_count: int
     compute_ready: bool
     version: str = ""
+    health_state: str = ""
+    cuda_version: str = ""
+    hostname: str = ""
     error: str = ""
     raw_response: Optional[Any] = None
 
@@ -36,7 +39,10 @@ class WorkerTable(Widget):
     .table-title {
         text-style: bold;
         color: $primary-lighten-2;
-        padding-bottom: 1;
+    }
+    .table-subtitle {
+        color: $text-muted;
+        margin-bottom: 1;
     }
     DataTable {
         height: 1fr;
@@ -65,7 +71,10 @@ class WorkerTable(Widget):
         self._selected_target: Optional[str] = None
 
     def compose(self) -> ComposeResult:
-        yield Static("💻 WORKERS (LAN & Configured)", classes="table-title")
+        yield Static("NODES & WORKERS", classes="table-title")
+        yield Static(
+            "Select node to inspect telemetry • Enter for full details", classes="table-subtitle"
+        )
         table = DataTable(cursor_type="row", id="workers-datatable")
         table.zebra_stripes = True
         yield table
@@ -88,11 +97,14 @@ class WorkerTable(Widget):
 
         for w in worker_entries:
             if w.status == "ONLINE":
-                status_text = Text("● ONLINE", style="bold green")
+                if w.health_state in ("DEGRADED", 2, "2"):
+                    status_text = Text("▲ DEGRADED", style="bold yellow")
+                else:
+                    status_text = Text("● HEALTHY", style="bold green")
             elif w.status == "CONNECTING":
-                status_text = Text("● CONNECTING", style="bold yellow")
+                status_text = Text("◌ SYNCING", style="bold cyan")
             else:
-                status_text = Text("● OFFLINE", style="bold red")
+                status_text = Text("✖ OFFLINE", style="bold red")
 
             gpus_text = f"{w.gpu_count} GPU" if w.gpu_count == 1 else f"{w.gpu_count} GPUs"
             if w.status != "ONLINE":
