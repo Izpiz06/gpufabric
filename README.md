@@ -570,6 +570,15 @@ gpufabric/
 
 ---
 
+## 🤝 Contributing
+
+We welcome contributions! Please review our [Contributing Guide](CONTRIBUTING.md) for details on:
+- Commit signing (`git commit -s`)
+- Copyright header rules (`# Copyright (c) 2026 <Author>` / `# SPDX-License-Identifier: Apache-2.0`)
+- Running linters, header checks, and unit tests
+
+---
+
 ## 📄 License
 
 This project is licensed under the [Apache-2.0 License](LICENSE).
