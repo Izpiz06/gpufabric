@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 # Directories to scan
-SOURCE_DIRS = ["client", "worker", "common", "scripts", "tests", "proto"]
+SOURCE_DIRS = ["client", "worker", "common", "scripts", "tests", "proto", ".github"]
 
 # Files to exclude (e.g. protoc generated artifacts)
 EXCLUDE_FILES = {
@@ -36,7 +36,7 @@ PROTO_HEADER_RE = re.compile(
 
 def check_file_header(file_path: Path) -> bool:
     content = file_path.read_text(encoding="utf-8")
-    if file_path.suffix == ".py":
+    if file_path.suffix in [".py", ".yml", ".yaml"]:
         return bool(PY_HEADER_RE.match(content))
     elif file_path.suffix == ".proto":
         return bool(PROTO_HEADER_RE.match(content))
@@ -51,7 +51,7 @@ def main() -> int:
         if not target_dir.exists():
             continue
 
-        for ext in ["*.py", "*.proto"]:
+        for ext in ["*.py", "*.proto", "*.yml", "*.yaml"]:
             for file_path in target_dir.rglob(ext):
                 rel_path = file_path.relative_to(ROOT).as_posix()
                 if rel_path in EXCLUDE_FILES or "__pycache__" in rel_path:
