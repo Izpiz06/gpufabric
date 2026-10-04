@@ -89,11 +89,14 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         gpu_ready = state != HealthState.UNAVAILABLE
         cuda_ver = self.gpu.get_cuda_version()
         driver_ver = self.gpu.get_driver_version()
-        gpu_count = (
-            self.gpu.device_count()
-            if self.gpu.is_available()
-            else (self.executor.device_count if self.executor.is_gpu_ready() else 0)
-        )
+        try:
+            gpu_count = (
+                self.gpu.device_count()
+                if self.gpu.is_available()
+                else (self.executor.device_count if self.executor.is_gpu_ready() else 0)
+            )
+        except Exception:
+            gpu_count = 0
 
         return HealthResponse(
             status="ok",
