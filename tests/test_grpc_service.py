@@ -355,3 +355,26 @@ def test_service_run_benchmark_out_of_memory():
             )
     assert exc.value.code == grpc.StatusCode.RESOURCE_EXHAUSTED
     assert servicer.state.active_tasks == 0
+
+
+def test_state_multi_device_task_tracking():
+    from worker.state import WorkerState
+
+    state = WorkerState("test-worker")
+    state.increment_tasks(device_index=0, workload="vector_add")
+    state.increment_tasks(device_index=1, workload="matmul")
+    assert state.active_tasks == 2
+    assert state.get_device_workload(0) == "vector_add"
+    assert state.get_device_workload(1) == "matmul"
+
+    # Device 0 finishes first
+    state.decrement_tasks(device_index=0)
+    assert state.active_tasks == 1
+    assert state.get_device_workload(0) == "IDLE"
+    assert state.get_device_workload(1) == "matmul"
+
+    # Device 1 finishes
+    state.decrement_tasks(device_index=1)
+    assert state.active_tasks == 0
+    assert state.get_device_workload(0) == "IDLE"
+    assert state.get_device_workload(1) == "IDLE"
