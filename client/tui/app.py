@@ -44,14 +44,14 @@ class GPUFabricApp(App):
     }
     .main-container {
         height: 1fr;
-        padding: 1;
+        padding: 0 1;
     }
     WorkerTable {
-        width: 1fr;
+        width: 48%;
         margin-right: 1;
     }
     GPUCard {
-        width: 1fr;
+        width: 52%;
     }
     Footer {
         dock: bottom;
@@ -224,9 +224,13 @@ class GPUFabricApp(App):
                     entry.version = resp.version
                     entry.compute_ready = resp.compute_ready
                     entry.gpu_count = len(resp.gpus)
+                    entry.health_state = getattr(resp, "health_state", "HEALTHY")
+                    entry.cuda_version = getattr(resp, "cuda_version", "")
+                    entry.hostname = getattr(resp, "hostname", "")
                     entry.error = ""
                 else:
                     entry.status = "UNREACHABLE"
+                    entry.health_state = "UNAVAILABLE"
                     entry.error = err or "Connection failed"
 
             header.status_message = "Ready"

@@ -25,7 +25,10 @@ class GPUCard(Widget):
     .card-title {
         text-style: bold;
         color: $accent-lighten-2;
-        padding-bottom: 1;
+    }
+    .card-subtitle {
+        color: $text-muted;
+        margin-bottom: 1;
     }
     .gpu-selector-row {
         height: 3;
@@ -42,7 +45,7 @@ class GPUCard(Widget):
         color: $text-muted;
     }
     .metric-value {
-        width: 24;
+        width: 26;
         text-style: bold;
         color: $text;
     }
@@ -79,7 +82,10 @@ class GPUCard(Widget):
         self.status_data: Optional[Dict[str, Any]] = None
 
     def compose(self) -> ComposeResult:
-        yield Static("🎮 SELECTED GPU TELEMETRY", classes="card-title")
+        yield Static("GPU TELEMETRY & HARDWARE", classes="card-title")
+        yield Static(
+            "Live device load, memory, thermals, and workload status", classes="card-subtitle"
+        )
         with Container(id="gpu-card-content"):
             with Horizontal(classes="gpu-selector-row"):
                 yield Label("GPU Device: ", classes="metric-name")
@@ -105,7 +111,7 @@ class GPUCard(Widget):
 
                 # Core Utilization
                 with Horizontal(classes="metric-row"):
-                    yield Label("GPU Utilization:", classes="metric-name")
+                    yield Label("GPU Core:", classes="metric-name")
                     yield Label("0%", id="util-text", classes="metric-value")
                     yield ProgressBar(
                         total=100,
@@ -117,13 +123,25 @@ class GPUCard(Widget):
 
                 # Memory Utilization
                 with Horizontal(classes="metric-row"):
-                    yield Label("Memory Bus Util:", classes="metric-name")
+                    yield Label("Memory Bus:", classes="metric-name")
                     yield Label("0%", id="mem-util-text", classes="metric-value")
                     yield ProgressBar(
                         total=100,
                         show_percentage=False,
                         show_eta=False,
                         id="mem-util-bar",
+                        classes="metric-bar",
+                    )
+
+                # Power Draw
+                with Horizontal(classes="metric-row"):
+                    yield Label("Power Draw:", classes="metric-name")
+                    yield Label("0 W / 0 W (0%)", id="power-text", classes="metric-value")
+                    yield ProgressBar(
+                        total=100,
+                        show_percentage=False,
+                        show_eta=False,
+                        id="power-bar",
                         classes="metric-bar",
                     )
 
@@ -136,7 +154,13 @@ class GPUCard(Widget):
                         yield Label("0", id="tasks-text", classes="metric-value")
 
                     with Horizontal(classes="metric-row"):
-                        yield Label("Compute Capability:", classes="metric-name")
+                        yield Label("Workload:", classes="metric-name")
+                        yield Label("IDLE", id="workload-text", classes="metric-value")
+                        yield Label("Availability:", classes="metric-name")
+                        yield Label("Available", id="avail-text", classes="metric-value")
+
+                    with Horizontal(classes="metric-row"):
+                        yield Label("Compute Cap:", classes="metric-name")
                         yield Label("-", id="cc-text", classes="metric-value")
                         yield Label("Driver Version:", classes="metric-name")
                         yield Label("-", id="driver-text", classes="metric-value")
@@ -252,6 +276,14 @@ class GPUCard(Widget):
 
         active_tasks = getattr(status, "active_tasks", 0)
         compute_cap = getattr(gpu_spec, "compute_capability", "N/A") or "N/A"
+        power_w = getattr(status, "power_usage_w", 0) or getattr(gpu_spec, "power_usage_w", 0)
+        power_limit_w = getattr(status, "power_limit_w", 0) or getattr(gpu_spec, "power_limit_w", 0)
+        workload = (
+            getattr(status, "current_workload", "")
+            or getattr(gpu_spec, "current_workload", "")
+            or "IDLE"
+        )
+        available = getattr(status, "available", True)
 
         # Update UI elements
         vram_pct = int((used_vram / total_vram * 100)) if total_vram > 0 else 0
@@ -265,14 +297,50 @@ class GPUCard(Widget):
         self.query_one("#mem-util-text", Label).update(f"{mem_util}%")
         self.query_one("#mem-util-bar", ProgressBar).progress = int(mem_util)
 
+        # Power telemetry
+        if power_limit_w > 0:
+            power_pct = int(min(100, (power_w / power_limit_w) * 100))
+            power_text = f"{power_w} W / {power_limit_w} W ({power_pct}%)"
+        elif power_w > 0:
+            power_pct = 0
+            power_text = f"{power_w} W"
+        else:
+            power_pct = 0
+            power_text = "N/A"
+        try:
+            self.query_one("#power-text", Label).update(power_text)
+            self.query_one("#power-bar", ProgressBar).progress = power_pct
+        except Exception:
+            pass
+
         # Temperature color
         if temp_c < 60:
-            temp_text = Text(f"{temp_c} °C", style="bold green")
+            temp_text = Text(f"{temp_c} °C (Cool)", style="bold green")
         elif temp_c < 80:
-            temp_text = Text(f"{temp_c} °C", style="bold yellow")
+            temp_text = Text(f"{temp_c} °C (Warm)", style="bold yellow")
         else:
-            temp_text = Text(f"{temp_c} °C", style="bold red")
+            temp_text = Text(f"{temp_c} °C (Hot)", style="bold red")
         self.query_one("#temp-text", Label).update(temp_text)
 
         self.query_one("#tasks-text", Label).update(str(active_tasks))
         self.query_one("#cc-text", Label).update(compute_cap)
+
+        # Workload & availability
+        try:
+            if workload == "IDLE":
+                wl_text = Text("IDLE", style="dim")
+            else:
+                wl_text = Text(f"⚡ {workload}", style="bold cyan")
+            self.query_one("#workload-text", Label).update(wl_text)
+
+            if status is not None:
+                av_text = (
+                    Text("✓ Ready", style="bold green")
+                    if available
+                    else Text("✗ Busy", style="bold red")
+                )
+            else:
+                av_text = Text("◌ Syncing", style="dim cyan")
+            self.query_one("#avail-text", Label).update(av_text)
+        except Exception:
+            pass

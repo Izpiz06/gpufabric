@@ -28,9 +28,9 @@ class BenchmarkModal(ModalScreen):
         background: rgba(0, 0, 0, 0.7);
     }
     .bench-dialog {
-        width: 85%;
+        width: 88%;
         height: 85%;
-        border: thick $accent;
+        border: round $accent;
         background: $surface;
         padding: 1 2;
     }
@@ -45,7 +45,7 @@ class BenchmarkModal(ModalScreen):
         margin: 1 0;
         padding: 1;
         background: $panel;
-        border: round $primary;
+        border: solid $panel-lighten-1;
     }
     .form-row {
         height: 3;
@@ -101,7 +101,7 @@ class BenchmarkModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Container(classes="bench-dialog"):
-            yield Static("🚀 Remote GPU Benchmark", classes="bench-title")
+            yield Static("GPU Benchmark Execution", classes="bench-title")
 
             with Vertical(classes="config-grid"):
                 with Horizontal(classes="form-row"):
