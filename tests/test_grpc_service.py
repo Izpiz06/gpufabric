@@ -298,6 +298,7 @@ def test_service_list_gpus():
         "temp": 52,
     }
     with (
+        patch.object(servicer.gpu, "is_available", return_value=True),
         patch.object(servicer.gpu, "list_devices", return_value=[device]),
         patch.object(servicer.executor, "is_gpu_ready", return_value=False),
     ):
