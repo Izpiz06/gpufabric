@@ -321,3 +321,25 @@ class BenchmarkResponse(_message.Message):
     gflops: float
     pi_estimate: float
     def __init__(self, benchmark: _Optional[_Union[Benchmark, str]] = ..., size: _Optional[int] = ..., device_index: _Optional[int] = ..., repeats: _Optional[int] = ..., best_ms: _Optional[float] = ..., mean_ms: _Optional[float] = ..., bandwidth_gb_s: _Optional[float] = ..., peak_bandwidth_gb_s: _Optional[float] = ..., gflops: _Optional[float] = ..., pi_estimate: _Optional[float] = ...) -> None: ...
+
+class EnrollRequest(_message.Message):
+    __slots__ = ("token", "client_name", "csr_pem")
+    TOKEN_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_NAME_FIELD_NUMBER: _ClassVar[int]
+    CSR_PEM_FIELD_NUMBER: _ClassVar[int]
+    token: str
+    client_name: str
+    csr_pem: bytes
+    def __init__(self, token: _Optional[str] = ..., client_name: _Optional[str] = ..., csr_pem: _Optional[bytes] = ...) -> None: ...
+
+class EnrollResponse(_message.Message):
+    __slots__ = ("success", "message", "client_cert_pem", "ca_cert_pem")
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_CERT_PEM_FIELD_NUMBER: _ClassVar[int]
+    CA_CERT_PEM_FIELD_NUMBER: _ClassVar[int]
+    success: bool
+    message: str
+    client_cert_pem: bytes
+    ca_cert_pem: bytes
+    def __init__(self, success: _Optional[bool] = ..., message: _Optional[str] = ..., client_cert_pem: _Optional[bytes] = ..., ca_cert_pem: _Optional[bytes] = ...) -> None: ...

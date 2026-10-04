@@ -338,3 +338,89 @@ def channel_credentials(tls_dir: Path) -> grpc.ChannelCredentials:
     return grpc.ssl_channel_credentials(
         root_certificates=ca, private_key=key, certificate_chain=cert
     )
+
+
+def generate_client_csr(name: str, key: ec.EllipticCurvePrivateKey) -> bytes:
+    """Generate a PKCS#10 Certificate Signing Request (CSR) for a client key."""
+    csr = (
+        x509.CertificateSigningRequestBuilder().subject_name(_name(name)).sign(key, hashes.SHA256())
+    )
+    return csr.public_bytes(serialization.Encoding.PEM)
+
+
+def sign_client_csr(
+    ca_dir: Path, csr_pem: bytes, name: Optional[str] = None
+) -> Tuple[bytes, bytes]:
+    """Validate and sign a client CSR using the CA in ca_dir.
+
+    Returns (client_cert_pem, ca_cert_pem).
+    """
+    ca_dir = Path(ca_dir)
+    try:
+        ca_key = serialization.load_pem_private_key((ca_dir / "ca.key").read_bytes(), None)
+        ca_pem = (ca_dir / "ca.crt").read_bytes()
+    except FileNotFoundError as e:
+        raise TLSConfigError(f"No CA in {ca_dir}. Run `gpufabric-certs init` first.") from e
+
+    ca_cert = x509.load_pem_x509_certificate(ca_pem)
+    try:
+        csr = x509.load_pem_x509_csr(csr_pem)
+    except Exception as e:
+        raise TLSConfigError(f"Malformed Certificate Signing Request: {e}") from e
+
+    if not csr.is_signature_valid:
+        raise TLSConfigError("CSR signature verification failed.")
+
+    attrs = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    common_name = name or (attrs[0].value if attrs else "client")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(_name(str(common_name)))
+        .issuer_name(ca_cert.subject)
+        .public_key(csr.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(minutes=5))
+        .not_valid_after(now + datetime.timedelta(days=CERT_VALIDITY_DAYS))
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]), critical=False)
+        .sign(ca_key, hashes.SHA256())
+    )
+
+    client_cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+    return client_cert_pem, ca_pem
+
+
+def save_client_bundle(
+    tls_dir: Path, client_key_pem: bytes, client_cert_pem: bytes, ca_cert_pem: bytes
+) -> None:
+    """Save client key, certificate, and CA certificate with secure owner-only permissions."""
+    tls_dir = Path(tls_dir)
+    tls_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(tls_dir, 0o700)
+    except OSError:
+        pass
+
+    key_path = tls_dir / "client.key"
+    fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(client_key_pem)
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        pass
+
+    cert_path = tls_dir / "client.crt"
+    cert_path.write_bytes(client_cert_pem)
+    try:
+        os.chmod(cert_path, 0o644)
+    except OSError:
+        pass
+
+    ca_path = tls_dir / "ca.crt"
+    ca_path.write_bytes(ca_cert_pem)
+    try:
+        os.chmod(ca_path, 0o644)
+    except OSError:
+        pass

@@ -220,3 +220,24 @@ message BenchmarkResponse {
   double gflops = 9;               // matmul: 2 * size^3 / best time
   double pi_estimate = 10;         // monte carlo: over size * repeats points
 }
+
+// ---------------------------------------------------------------------------
+// Client Enrollment Service
+// ---------------------------------------------------------------------------
+
+service EnrollmentService {
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+}
+
+message EnrollRequest {
+  string token = 1;
+  string client_name = 2;
+  bytes csr_pem = 3;
+}
+
+message EnrollResponse {
+  bool success = 1;
+  string message = 2;
+  bytes client_cert_pem = 3;
+  bytes ca_cert_pem = 4;
+}

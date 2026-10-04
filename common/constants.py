@@ -4,6 +4,8 @@
 """Common constants for GPU Fabric."""
 
 DEFAULT_PORT = 50051
+DEFAULT_ENROLL_PORT = 50052
+DEFAULT_TOKEN_TTL_SECONDS = 900  # 15 minutes
 API_VERSION = "0.1.0"
 
 # gRPC rejects messages above 4 MiB by default. A 1000x1000 float32 matmul

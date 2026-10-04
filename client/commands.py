@@ -24,7 +24,11 @@ from client.formatters import (
     print_status,
 )
 from client.verify import REFERENCE, relative_error, tolerance
-from common.constants import DEFAULT_DISCOVERY_TIMEOUT
+from common.constants import (
+    DEFAULT_DISCOVERY_TIMEOUT,
+    DEFAULT_ENROLL_PORT,
+    DEFAULT_PORT,
+)
 from common.gpufabric_pb2 import ListGPUsResponse
 
 WORKERS_ENV = "GPUFABRIC_WORKERS"
@@ -196,3 +200,40 @@ def cmd_bench(client: GPUFabricClient, args):
     print_bench_report(checks, sweep)
     if any(c.status == "FAIL" for c in checks):
         sys.exit(1)
+
+
+def cmd_enroll(args, client_kwargs=None):
+    from client.enroll import enroll_client
+
+    enroll_port = getattr(args, "enroll_port", DEFAULT_ENROLL_PORT)
+    worker_port = getattr(args, "port", DEFAULT_PORT)
+    tls_dir = getattr(args, "tls_dir", None)
+    token = args.token
+    worker_ip = args.worker_ip
+    client_name = getattr(args, "name", None)
+    force = getattr(args, "force", False)
+    timeout = getattr(args, "timeout", 15.0)
+
+    with console.status(f"[bold green]Enrolling client with worker {worker_ip}:{enroll_port}..."):
+        dest_dir, gpu_info = enroll_client(
+            worker_ip=worker_ip,
+            token=token,
+            client_name=client_name,
+            enroll_port=enroll_port,
+            port=worker_port,
+            tls_dir=tls_dir,
+            force=force,
+            verify_mtls=True,
+            timeout=timeout,
+        )
+
+    console.print("[bold green]✓ Client successfully enrolled![/bold green]")
+    console.print(f"Certificates and private key saved to: [cyan]{dest_dir}[/cyan]")
+    if gpu_info is not None:
+        console.print(
+            f"[bold green]✓ Verified mutual TLS connection to {worker_ip}:{worker_port}[/bold green]"
+        )
+        if hasattr(gpu_info, "gpus") and gpu_info.gpus:
+            console.print(f"Discovered {len(gpu_info.gpus)} GPU(s) on worker:")
+            for g in gpu_info.gpus:
+                console.print(f"  • GPU {g.device_index}: {g.name}")

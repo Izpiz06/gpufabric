@@ -12,7 +12,12 @@ from typing import Optional
 
 import grpc
 
-from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
+from common.constants import (
+    DEFAULT_ENROLL_PORT,
+    DEFAULT_MAX_MESSAGE_MB,
+    DEFAULT_PORT,
+    MAX_MESSAGE_MB_LIMIT,
+)
 from common.gpufabric_pb2_grpc import add_GPUFabricServiceServicer_to_server
 from common.grpc_options import message_size_options
 from common.tls import TLSConfigError, default_tls_dir, server_credentials
@@ -74,6 +79,12 @@ def parse_args():
     )
     parser.add_argument(
         "--port", type=int, default=DEFAULT_PORT, help=f"Port to bind (default: {DEFAULT_PORT})"
+    )
+    parser.add_argument(
+        "--enroll-port",
+        type=int,
+        default=DEFAULT_ENROLL_PORT,
+        help=f"Port for client enrollment service (default: {DEFAULT_ENROLL_PORT}, 0 to disable)",
     )
     parser.add_argument("--worker-id", type=str, default=None, help="Custom worker identifier")
     parser.add_argument(
@@ -140,6 +151,24 @@ def run_worker():
 
     server.start()
 
+    enroll_server = None
+    if credentials is not None and args.enroll_port > 0:
+        from worker.enrollment import create_enrollment_server
+
+        effective_tls_dir = args.tls_dir or default_tls_dir()
+        try:
+            enroll_server = create_enrollment_server(
+                tls_dir=effective_tls_dir,
+                host=args.host,
+                port=args.enroll_port,
+            )
+            enroll_server.start()
+            logger.info(
+                f"Client enrollment service running on {args.host}:{enroll_server.bound_port}"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to start enrollment service on port {args.enroll_port}: {e}")
+
     advertiser = None
     if not args.no_discovery:
         from common.discovery import WorkerAdvertiser
@@ -155,6 +184,8 @@ def run_worker():
     try:
         server.wait_for_termination()
     finally:
+        if enroll_server is not None:
+            enroll_server.stop(grace=0)
         if advertiser is not None:
             advertiser.stop()
 
