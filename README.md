@@ -135,7 +135,11 @@ pip install cupy-cuda13x
 
 GPU Fabric secures communication between clients and workers using **mutual TLS (mTLS)**.
 
-1. **On the Worker Machine**, initialize the Certificate Authority (CA) and server certificate by specifying the IP(s) or hostname(s) clients will use:
+1. **On the Worker Machine**, initialize the Certificate Authority (CA) and server certificate. By default, it automatically detects all local network addresses and hostnames:
+   ```bash
+   gpufabric-certs init
+   ```
+   Or optionally specify explicit IP(s) or hostname(s) with `--hosts`:
    ```bash
    gpufabric-certs init --hosts 192.168.1.50,gpu-box
    ```

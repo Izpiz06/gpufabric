@@ -127,3 +127,90 @@ def test_certs_cli(tmp_path, capsys):
     assert (tmp_path / "clients" / "laptop" / "client.key").is_file()
     assert certs_main(["init", "--hosts", "10.0.0.5", "--dir", str(tmp_path)]) == 1
     assert "already has a CA" in capsys.readouterr().err
+
+
+def test_detect_host_addresses():
+    from common.tls import detect_host_addresses
+
+    addrs = detect_host_addresses()
+    assert "127.0.0.1" in addrs
+    assert "localhost" in addrs
+    assert "::1" in addrs
+
+
+def test_detect_host_addresses_mocked(monkeypatch):
+    from unittest.mock import MagicMock
+
+    from common.tls import detect_host_addresses
+
+    mock_adapters = [
+        MagicMock(
+            name="eth0",
+            ips=[
+                MagicMock(ip="192.168.1.150"),
+                MagicMock(ip=("2001:db8::1", 0, 0)),
+            ],
+        ),
+        MagicMock(
+            name="docker0",
+            ips=[MagicMock(ip="172.17.0.1")],
+        ),
+        MagicMock(
+            name="br-abc1234",
+            ips=[MagicMock(ip="172.18.0.1")],
+        ),
+        MagicMock(
+            name="veth42",
+            ips=[MagicMock(ip=("fe80::42", 0, 1))],
+        ),
+        MagicMock(
+            name="wlan0",
+            ips=[MagicMock(ip="10.0.0.25")],
+        ),
+    ]
+    # Set adapter.name appropriately
+    mock_adapters[0].name = "eth0"
+    mock_adapters[1].name = "docker0"
+    mock_adapters[2].name = "br-abc1234"
+    mock_adapters[3].name = "veth42"
+    mock_adapters[4].name = "wlan0"
+
+    mock_ifaddr = MagicMock()
+    mock_ifaddr.get_adapters.return_value = mock_adapters
+    monkeypatch.setattr("common.tls.ifaddr", mock_ifaddr, raising=False)
+
+    addrs = detect_host_addresses()
+    assert "192.168.1.150" in addrs
+    assert "10.0.0.25" in addrs
+    assert "2001:db8::1" in addrs
+    assert "172.17.0.1" not in addrs
+    assert "172.18.0.1" not in addrs
+    assert "fe80::42" not in addrs
+
+
+def test_init_auto_detects_hosts(tmp_path):
+    used_hosts = init_tls_dir(tmp_path)
+    assert len(used_hosts) > 0
+    assert "127.0.0.1" in used_hosts
+    assert "localhost" in used_hosts
+
+    cert = x509.load_pem_x509_certificate((tmp_path / "server.crt").read_bytes())
+    san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+    ip_sans = [str(ip) for ip in san.get_values_for_type(x509.IPAddress)]
+    dns_sans = san.get_values_for_type(x509.DNSName)
+
+    assert "127.0.0.1" in ip_sans
+    assert "localhost" in dns_sans
+
+
+def test_certs_cli_auto_init(tmp_path, capsys):
+    assert certs_main(["init", "--dir", str(tmp_path)]) == 0
+    out = capsys.readouterr().out
+    assert "Automatically detected worker host addresses for certificate SANs:" in out
+    assert "• 127.0.0.1" in out
+    assert (tmp_path / "server.crt").is_file()
+
+    # Explicit empty --hosts string must be rejected rather than falling back to auto-detect
+    assert certs_main(["init", "--hosts", "", "--dir", str(tmp_path / "empty")]) == 1
+    err = capsys.readouterr().err
+    assert "At least one worker IP or hostname is required" in err
