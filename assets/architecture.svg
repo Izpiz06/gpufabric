@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 620" width="100%" height="100%" style="background: #0f172a; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="clientGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="workerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#1e293b" stop-opacity="0.9" />
+    </linearGradient>
+    <linearGradient id="gpuGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+    <linearGradient id="netGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#34d399" />
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.4" />
+    </filter>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Markers -->
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8" />
+    </marker>
+    <marker id="arrowEmerald" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399" />
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#a78bfa" />
+    </marker>
+  </defs>
+
+  <!-- Title Badge -->
+  <g transform="translate(50, 25)">
+    <rect x="0" y="0" width="960" height="45" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+    <text x="480" y="28" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="700" letter-spacing="1">⚡ GPU FABRIC ARCHITECTURE · DISTRIBUTED gRPC RUNTIME</text>
+  </g>
+
+  <!-- ==================== MACHINE A: CLIENT ==================== -->
+  <g transform="translate(50, 95)" filter="url(#dropShadow)">
+    <!-- Container Box -->
+    <rect x="0" y="0" width="370" height="490" rx="16" fill="url(#clientGrad)" stroke="#38bdf8" stroke-width="2" stroke-dasharray="6,3" />
+    
+    <!-- Header -->
+    <rect x="15" y="15" width="340" height="42" rx="8" fill="#0369a1" fill-opacity="0.3" stroke="#38bdf8" stroke-width="1" />
+    <text x="35" y="41" fill="#38bdf8" font-size="16" font-weight="bold">💻 Machine A</text>
+    <text x="145" y="41" fill="#94a3b8" font-size="14">(Client / Workstation / TUI)</text>
+
+    <!-- Node 1: CLI / TUI -->
+    <g transform="translate(25, 75)">
+      <rect x="0" y="0" width="320" height="85" rx="10" fill="url(#cardGrad)" stroke="#64748b" stroke-width="1.5" />
+      <text x="20" y="30" fill="#38bdf8" font-size="14" font-weight="bold">🖥️ Client Interfaces</text>
+      <text x="20" y="52" fill="#f1f5f9" font-size="13">• Interactive Terminal UI (Textual)</text>
+      <text x="20" y="70" fill="#94a3b8" font-size="12">• Scriptable CLI Commands (ls, bench, etc.)</text>
+    </g>
+
+    <!-- Node 2: Python SDK -->
+    <g transform="translate(25, 190)">
+      <rect x="0" y="0" width="320" height="110" rx="10" fill="url(#cardGrad)" stroke="#64748b" stroke-width="1.5" />
+      <text x="20" y="28" fill="#38bdf8" font-size="14" font-weight="bold">📦 GPUFabricClient SDK</text>
+      <text x="20" y="50" fill="#f1f5f9" font-size="13">• mDNS LAN Worker Discovery</text>
+      <text x="20" y="70" fill="#f1f5f9" font-size="13">• Auto gRPC Health Verification</text>
+      <text x="20" y="90" fill="#94a3b8" font-size="12">• Tensor Serialization (to_tensor/from_tensor)</text>
+    </g>
+
+    <!-- Node 3: gRPC Stub -->
+    <g transform="translate(25, 330)">
+      <rect x="0" y="0" width="320" height="85" rx="10" fill="url(#cardGrad)" stroke="#64748b" stroke-width="1.5" />
+      <text x="20" y="30" fill="#38bdf8" font-size="14" font-weight="bold">🔌 gRPC Client Stub</text>
+      <text x="20" y="52" fill="#f1f5f9" font-size="13">• HTTP/2 Secure Channel</text>
+      <text x="20" y="70" fill="#a78bfa" font-size="12">🔐 mTLS Credentials (client.crt &amp; client.key)</text>
+    </g>
+
+    <!-- Internal Connectors (Client) -->
+    <path d="M 185 160 L 185 190" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowCyan)" />
+    <path d="M 185 300 L 185 330" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowCyan)" />
+
+    <text x="25" y="455" fill="#64748b" font-size="11" font-family="monospace">Zero cloud dependencies · Local LAN scope</text>
+  </g>
+
+  <!-- ==================== NETWORK BRIDGE ==================== -->
+  <g transform="translate(435, 160)">
+    <!-- Discovery Channel -->
+    <g transform="translate(0, 40)">
+      <path d="M 0 0 L 175 0" stroke="#38bdf8" stroke-width="2.5" stroke-dasharray="4,4" />
+      <rect x="12" y="-18" width="155" height="34" rx="6" fill="#1e293b" stroke="#38bdf8" stroke-width="1" />
+      <text x="90" y="-1" text-anchor="middle" fill="#38bdf8" font-size="11" font-weight="bold">📡 mDNS Discovery</text>
+      <text x="90" y="11" text-anchor="middle" fill="#94a3b8" font-size="9">_gpufabric._tcp.local</text>
+    </g>
+
+    <!-- gRPC Data Channel -->
+    <g transform="translate(0, 160)">
+      <path d="M 0 0 L 175 0" stroke="url(#netGrad)" stroke-width="4" marker-end="url(#arrowEmerald)" />
+      <path d="M 175 16 L 0 16" stroke="url(#netGrad)" stroke-width="4" marker-end="url(#arrowCyan)" />
+      
+      <rect x="8" y="-22" width="162" height="60" rx="8" fill="#1e293b" stroke="#a78bfa" stroke-width="1.5" filter="url(#dropShadow)" />
+      <text x="89" y="-4" text-anchor="middle" fill="#f8fafc" font-size="12" font-weight="bold">🔒 mTLS Encrypted</text>
+      <text x="89" y="14" text-anchor="middle" fill="#38bdf8" font-size="11">gRPC / HTTP/2 + Protobuf</text>
+      <text x="89" y="29" text-anchor="middle" fill="#34d399" font-size="10">Port 50051 (Up to 2GB payload)</text>
+    </g>
+  </g>
+
+  <!-- ==================== MACHINE B: WORKER ==================== -->
+  <g transform="translate(630, 95)" filter="url(#dropShadow)">
+    <!-- Container Box -->
+    <rect x="0" y="0" width="380" height="490" rx="16" fill="url(#workerGrad)" stroke="#34d399" stroke-width="2" stroke-dasharray="6,3" />
+    
+    <!-- Header -->
+    <rect x="15" y="15" width="350" height="42" rx="8" fill="#065f46" fill-opacity="0.3" stroke="#34d399" stroke-width="1" />
+    <text x="35" y="41" fill="#34d399" font-size="16" font-weight="bold">🖥️ Machine B</text>
+    <text x="145" y="41" fill="#94a3b8" font-size="14">(Worker Node with GPU)</text>
+
+    <!-- Node 1: gRPC Server -->
+    <g transform="translate(25, 75)">
+      <rect x="0" y="0" width="330" height="75" rx="10" fill="url(#cardGrad)" stroke="#64748b" stroke-width="1.5" />
+      <text x="20" y="28" fill="#34d399" font-size="14" font-weight="bold">🚀 gRPC Service (:50051)</text>
+      <text x="20" y="48" fill="#f1f5f9" font-size="12">• GPUFabricServiceServicer</text>
+      <text x="20" y="64" fill="#a78bfa" font-size="11">🔐 mTLS Auth &amp; Task Concurrency Tracker</text>
+    </g>
+
+    <!-- Split Modules: NVML + Executor -->
+    <g transform="translate(25, 180)">
+      <!-- NVML Box -->
+      <rect x="0" y="0" width="155" height="110" rx="10" fill="url(#cardGrad)" stroke="#38bdf8" stroke-width="1.5" />
+      <text x="12" y="25" fill="#38bdf8" font-size="13" font-weight="bold">📊 GPU Manager</text>
+      <text x="12" y="45" fill="#f1f5f9" font-size="11">(pynvml / NVML)</text>
+      <text x="12" y="65" fill="#94a3b8" font-size="10">• Live VRAM Metrics</text>
+      <text x="12" y="80" fill="#94a3b8" font-size="10">• Core &amp; Bus Util %</text>
+      <text x="12" y="95" fill="#94a3b8" font-size="10">• Temperature °C</text>
+
+      <!-- Executor Box -->
+      <rect x="175" y="0" width="155" height="110" rx="10" fill="url(#cardGrad)" stroke="#34d399" stroke-width="1.5" />
+      <text x="187" y="25" fill="#34d399" font-size="13" font-weight="bold">⚡ GPU Executor</text>
+      <text x="187" y="45" fill="#f1f5f9" font-size="11">(CuPy Runtime)</text>
+      <text x="187" y="65" fill="#94a3b8" font-size="10">• CUDA Kernels</text>
+      <text x="187" y="80" fill="#94a3b8" font-size="10">• Matrix Ops &amp; Triad</text>
+      <text x="187" y="95" fill="#94a3b8" font-size="10">• Zero CPU Fallback</text>
+    </g>
+
+    <!-- Node 3: Physical GPU -->
+    <g transform="translate(25, 325)">
+      <rect x="0" y="0" width="330" height="95" rx="10" fill="url(#gpuGrad)" stroke="#10b981" stroke-width="2" />
+      <text x="20" y="30" fill="#34d399" font-size="15" font-weight="bold">⚡ Physical NVIDIA GPU</text>
+      <text x="20" y="52" fill="#f8fafc" font-size="13">RTX 3080 / 4090 / A100 / H100</text>
+      <text x="20" y="74" fill="#a7f3d0" font-size="11">• Dedicated High-Bandwidth VRAM · CUDA &amp; Tensor Cores</text>
+    </g>
+
+    <!-- Internal Connectors (Worker) -->
+    <path d="M 190 150 L 102 180" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrowCyan)" />
+    <path d="M 190 150 L 252 180" stroke="#34d399" stroke-width="2" marker-end="url(#arrowEmerald)" />
+    <path d="M 102 290 L 140 325" stroke="#38bdf8" stroke-width="2" stroke-dasharray="3,3" marker-end="url(#arrowCyan)" />
+    <path d="M 252 290 L 220 325" stroke="#34d399" stroke-width="2" marker-end="url(#arrowEmerald)" />
+
+    <text x="25" y="455" fill="#64748b" font-size="11" font-family="monospace">CUDA 12.x / NVML · Automatic Advertiser</text>
+  </g>
+</svg>

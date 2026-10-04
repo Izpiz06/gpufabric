@@ -67,31 +67,13 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 
 ## 🏗️ Architecture
 
-```mermaid
-flowchart LR
-    subgraph ClientMachine["💻 Machine A (Client / Laptop)"]
-        CLI["GPU Fabric CLI\n(python -m client)"]
-        SDK["Python SDK\n(GPUFabricClient)"]
-        Stub["gRPC Client Stub\n(GPUFabricServiceStub)"]
+<div align="center">
 
-        CLI --> SDK
-        SDK --> Stub
-    end
+![GPU Fabric Architecture](assets/architecture.svg)
 
-    subgraph WorkerMachine["🖥️ Machine B (GPU Worker Node)"]
-        Server["gRPC Server (:50051)\n(GPUFabricServiceServicer)"]
-        NVML["GPU Manager\n(pynvml / NVML)"]
-        Executor["GPU Executor\n(CuPy)"]
-        GPU[("⚡ NVIDIA GPU\nRTX 3080/4090/A100")]
+<sub>*Excalidraw diagram source available at [`assets/architecture.excalidraw`](assets/architecture.excalidraw) (open on [excalidraw.com](https://excalidraw.com)).*</sub>
 
-        Server --> NVML
-        Server --> Executor
-        Executor -->|CUDA Kernels| GPU
-        NVML -.->|Telemetry| GPU
-    end
-
-    Stub -->|"HTTP/2 & Protobuf over LAN (mTLS)"| Server
-```
+</div>
 
 ---
 
