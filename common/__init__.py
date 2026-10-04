@@ -6,9 +6,7 @@
 from common.constants import (
     API_VERSION,
     DEFAULT_DISCOVERY_TIMEOUT,
-    DEFAULT_ENROLL_PORT,
     DEFAULT_PORT,
-    DEFAULT_TOKEN_TTL_SECONDS,
     DISCOVERY_SERVICE_TYPE,
 )
 from common.discovery import (
@@ -20,8 +18,6 @@ from common.discovery import (
 )
 from common.formatting import bytes_to_human
 from common.gpufabric_pb2 import (
-    EnrollRequest,
-    EnrollResponse,
     ExecuteRequest,
     ExecuteResponse,
     GPUInfoRequest,
@@ -34,19 +30,13 @@ from common.gpufabric_pb2 import (
     WorkloadType,
 )
 from common.gpufabric_pb2_grpc import (
-    EnrollmentServiceServicer,
-    EnrollmentServiceStub,
     GPUFabricServiceServicer,
     GPUFabricServiceStub,
-    add_EnrollmentServiceServicer_to_server,
     add_GPUFabricServiceServicer_to_server,
 )
-from common.tokens import EnrollmentToken, TokenStore
 
 __all__ = [
     "DEFAULT_PORT",
-    "DEFAULT_ENROLL_PORT",
-    "DEFAULT_TOKEN_TTL_SECONDS",
     "API_VERSION",
     "DISCOVERY_SERVICE_TYPE",
     "DEFAULT_DISCOVERY_TIMEOUT",
@@ -69,11 +59,4 @@ __all__ = [
     "GPUFabricServiceStub",
     "GPUFabricServiceServicer",
     "add_GPUFabricServiceServicer_to_server",
-    "EnrollRequest",
-    "EnrollResponse",
-    "EnrollmentServiceStub",
-    "EnrollmentServiceServicer",
-    "add_EnrollmentServiceServicer_to_server",
-    "EnrollmentToken",
-    "TokenStore",
 ]
