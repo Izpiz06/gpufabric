@@ -73,6 +73,18 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         if not nvml_avail and cupy_ready:
             return HealthState.DEGRADED, "Compute backend ready, but NVML telemetry is unavailable."
 
+        diag = getattr(self.executor, "diagnostics", None)
+        if diag is not None and not diag.cublas_available:
+            missing_tag = (
+                f" ({', '.join(diag.missing_libraries)} not found)"
+                if diag.missing_libraries
+                else ""
+            )
+            return (
+                HealthState.DEGRADED,
+                f"cuBLAS library missing{missing_tag}. Accelerated matrix operations unavailable.",
+            )
+
         try:
             count = self.gpu.device_count()
             if count == 0:
