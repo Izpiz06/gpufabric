@@ -16,6 +16,7 @@ from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_M
 from common.gpufabric_pb2_grpc import add_GPUFabricServiceServicer_to_server
 from common.grpc_options import message_size_options
 from common.tls import TLSConfigError, default_tls_dir, server_credentials
+from worker.diagnostics import probe_cuda_environment
 from worker.executor import GPUExecutor
 from worker.gpu import GPUManager
 from worker.service import GPUFabricServicer
@@ -34,6 +35,10 @@ def create_grpc_server(
     state = WorkerState(worker_id=worker_id)
     gpu_mgr = GPUManager()
     executor = GPUExecutor()
+    executor.diagnostics = probe_cuda_environment(gpu_mgr, executor)
+
+    logger.info("Worker Diagnostics:\n%s", executor.diagnostics.summary())
+
     if warmup:
         executor.warmup()
 

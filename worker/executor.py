@@ -5,9 +5,11 @@
 
 import logging
 import time
-from typing import Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
+
+from worker.diagnostics import _extract_missing_library_names, probe_cuda_environment
 
 logger = logging.getLogger("gpufabric.worker.executor")
 
@@ -54,6 +56,10 @@ def sample_inputs(op: str, dtype) -> List[np.ndarray]:
 
 class GPUExecutionError(Exception):
     """Raised when GPU execution fails or GPU runtime is absent."""
+
+
+class CUDALibraryNotFoundError(GPUExecutionError):
+    """Raised when a required CUDA shared library (e.g. libcublas) is missing."""
 
 
 class GPUOutOfMemoryError(GPUExecutionError):
@@ -104,6 +110,7 @@ class GPUExecutor:
 
     def __init__(self):
         self.device_count = 0
+        self.diagnostics = probe_cuda_environment(executor=self)
         self._detect()
 
     def _detect(self) -> None:
@@ -145,7 +152,12 @@ class GPUExecutor:
                 self.execute_vector_add([1.0], [1.0], device_index)
                 for dtype in (np.float32, np.float64):
                     for op in OPERATIONS:
-                        self.compute(op, sample_inputs(op, dtype), device_index)
+                        try:
+                            self.compute(op, sample_inputs(op, dtype), device_index)
+                        except CUDALibraryNotFoundError as e:
+                            logger.warning(
+                                f"GPU {device_index} warm-up: optional operation '{op}' unavailable: {e}"
+                            )
                 elapsed_ms = (time.perf_counter() - t0) * 1000.0
                 logger.info(f"GPU {device_index} warm-up done ({elapsed_ms:.1f} ms)")
             except Exception as e:
@@ -170,6 +182,17 @@ class GPUExecutor:
             t1 = time.perf_counter()
             return gc.tolist(), (t1 - t0) * 1000.0, self.backend_name
 
+    def refresh_diagnostics(self, gpu_manager=None) -> Any:
+        """Re-probe CUDA environment and math libraries dynamically."""
+        self.diagnostics = probe_cuda_environment(gpu_manager, executor=self)
+        return self.diagnostics
+
+    def is_cublas_ready(self) -> bool:
+        """Check if cuBLAS is ready, re-probing once if previously marked unavailable."""
+        if not self.diagnostics.cublas_available:
+            self.refresh_diagnostics()
+        return self.diagnostics.cublas_available
+
     def compute(
         self, op: str, inputs: Sequence[np.ndarray], device_index: int = 0
     ) -> Tuple[np.ndarray, float, float]:
@@ -181,6 +204,17 @@ class GPUExecutor:
         """
         validate_inputs(op, inputs)
         self._check_device(device_index)
+
+        if op == "matmul" and not self.is_cublas_ready():
+            missing_tag = (
+                f" ({', '.join(self.diagnostics.missing_libraries)} not found)"
+                if self.diagnostics.missing_libraries
+                else ""
+            )
+            raise CUDALibraryNotFoundError(
+                f"cuBLAS runtime library is missing{missing_tag}. Matrix multiplication is unavailable. "
+                "Remediation: install nvidia-cublas-cu12 or CUDA Toolkit."
+            )
 
         import cupy as cp
 
@@ -197,9 +231,28 @@ class GPUExecutor:
                 gpu_ms = cp.cuda.get_elapsed_time(start, end)
                 result = cp.asnumpy(out)
                 total_ms = (time.perf_counter() - t0) * 1000.0
-        except cp.cuda.memory.OutOfMemoryError as e:
-            cp.get_default_memory_pool().free_all_blocks()
-            raise GPUOutOfMemoryError(str(e)) from e
+        except Exception as e:
+            err_msg = str(e)
+            if "OutOfMemoryError" in type(e).__name__:
+                if hasattr(cp, "get_default_memory_pool"):
+                    try:
+                        cp.get_default_memory_pool().free_all_blocks()
+                    except Exception:
+                        pass
+                raise GPUOutOfMemoryError(str(e)) from e
+            if "libcublas" in err_msg or (
+                "cublas" in err_msg.lower()
+                and ("not found" in err_msg.lower() or "cannot open" in err_msg.lower())
+            ):
+                self.diagnostics.cublas_available = False
+                for lib in _extract_missing_library_names(err_msg):
+                    if lib not in self.diagnostics.missing_libraries:
+                        self.diagnostics.missing_libraries.append(lib)
+                raise CUDALibraryNotFoundError(
+                    f"cuBLAS runtime library is missing ({err_msg}). Matrix multiplication is unavailable. "
+                    "Remediation: install nvidia-cublas-cu12 or CUDA Toolkit."
+                ) from e
+            raise
         return result, gpu_ms, total_ms
 
     def run_benchmark(
@@ -220,6 +273,17 @@ class GPUExecutor:
             raise ValueError(f"repeats must be between 1 and {MAX_BENCHMARK_REPEATS}")
         self._check_device(device_index)
 
+        if name == "matmul" and not self.is_cublas_ready():
+            missing_tag = (
+                f" ({', '.join(self.diagnostics.missing_libraries)} not found)"
+                if self.diagnostics.missing_libraries
+                else ""
+            )
+            raise CUDALibraryNotFoundError(
+                f"cuBLAS runtime library is missing{missing_tag}. Benchmark 'matmul' is unavailable. "
+                "Remediation: install nvidia-cublas-cu12 or CUDA Toolkit."
+            )
+
         import cupy as cp
 
         runner = {
@@ -230,10 +294,29 @@ class GPUExecutor:
         try:
             with cp.cuda.Device(device_index):
                 return runner(cp, size, repeats)
-        except cp.cuda.memory.OutOfMemoryError as e:
-            raise GPUOutOfMemoryError(str(e)) from e
+        except Exception as e:
+            err_msg = str(e)
+            if "OutOfMemoryError" in type(e).__name__:
+                raise GPUOutOfMemoryError(str(e)) from e
+            if "libcublas" in err_msg or (
+                "cublas" in err_msg.lower()
+                and ("not found" in err_msg.lower() or "cannot open" in err_msg.lower())
+            ):
+                self.diagnostics.cublas_available = False
+                for lib in _extract_missing_library_names(err_msg):
+                    if lib not in self.diagnostics.missing_libraries:
+                        self.diagnostics.missing_libraries.append(lib)
+                raise CUDALibraryNotFoundError(
+                    f"cuBLAS runtime library is missing ({err_msg}). Benchmark 'matmul' is unavailable. "
+                    "Remediation: install nvidia-cublas-cu12 or CUDA Toolkit."
+                ) from e
+            raise
         finally:
-            cp.get_default_memory_pool().free_all_blocks()
+            if hasattr(cp, "get_default_memory_pool"):
+                try:
+                    cp.get_default_memory_pool().free_all_blocks()
+                except Exception:
+                    pass
 
     @staticmethod
     def _timed_runs(cp, fn, repeats: int):
