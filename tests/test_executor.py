@@ -169,11 +169,38 @@ def test_compute_matmul_missing_cublas_raises_diagnostic_error():
     executor.diagnostics.cublas_available = False
     executor.diagnostics.missing_libraries = ["libcublas.so.12"]
 
-    with patch.object(executor, "is_gpu_ready", return_value=True):
+    with (
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(executor, "refresh_diagnostics", return_value=executor.diagnostics),
+    ):
         with pytest.raises(CUDALibraryNotFoundError) as exc:
             executor.compute("matmul", [_f32(2, 2), _f32(2, 2)])
         assert "libcublas.so.12" in str(exc.value)
         assert "nvidia-cublas-cu12" in str(exc.value)
+
+
+def test_compute_matmul_recovery_via_refresh():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    executor.diagnostics.cublas_available = False
+
+    mock_cp = MagicMock()
+    mock_cp.cuda.Device.return_value.__enter__.return_value = None
+    mock_cp.matmul.return_value = MagicMock()
+    mock_cp.asnumpy.return_value = np.zeros((2, 2), dtype=np.float32)
+
+    def recover(gpu_manager=None):
+        executor.diagnostics.cublas_available = True
+        return executor.diagnostics
+
+    with (
+        patch.dict("sys.modules", {"cupy": mock_cp}),
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(executor, "refresh_diagnostics", side_effect=recover),
+    ):
+        res, gpu_ms, total_ms = executor.compute("matmul", [_f32(2, 2), _f32(2, 2)])
+        assert executor.diagnostics.cublas_available is True
+        assert res.shape == (2, 2)
 
 
 def test_run_benchmark_matmul_missing_cublas_raises_diagnostic_error():
@@ -182,7 +209,10 @@ def test_run_benchmark_matmul_missing_cublas_raises_diagnostic_error():
     executor.diagnostics.cublas_available = False
     executor.diagnostics.missing_libraries = ["libcublas.so.12"]
 
-    with patch.object(executor, "is_gpu_ready", return_value=True):
+    with (
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(executor, "refresh_diagnostics", return_value=executor.diagnostics),
+    ):
         with pytest.raises(CUDALibraryNotFoundError) as exc:
             executor.run_benchmark("matmul", 10)
         assert "libcublas.so.12" in str(exc.value)

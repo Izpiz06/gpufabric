@@ -92,12 +92,36 @@ def test_service_health_degraded_cublas_missing():
         patch.object(gpu, "is_available", return_value=True),
         patch.object(gpu, "device_count", return_value=1),
         patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(executor, "refresh_diagnostics", return_value=executor.diagnostics),
     ):
         mock_context = MagicMock()
         resp = servicer.GetHealth(HealthRequest(), mock_context)
         assert resp.health_state == HealthState.DEGRADED
         assert "cuBLAS library missing" in resp.health_details
         assert "libcublas.so.12" in resp.health_details
+
+
+def test_service_health_degraded_cublas_missing_and_high_temp_combined():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    executor.diagnostics.cublas_available = False
+    executor.diagnostics.missing_libraries = ["libcublas.so.12"]
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "device_count", return_value=1),
+        patch.object(gpu, "get_status", return_value={"temp": 92}),
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(executor, "refresh_diagnostics", return_value=executor.diagnostics),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetHealth(HealthRequest(), mock_context)
+        assert resp.health_state == HealthState.DEGRADED
+        assert "cuBLAS library missing" in resp.health_details
+        assert "libcublas.so.12" in resp.health_details
+        assert "GPU 0 temperature high (92°C)" in resp.health_details
 
 
 def test_service_health_degraded_cupy_missing():
@@ -420,7 +444,12 @@ def test_service_compute_matmul_missing_cublas_returns_unavailable():
     a = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
     req = ComputeRequest(op=Operation.OP_MATMUL, inputs=[to_tensor(a), to_tensor(a)])
 
-    with patch.object(servicer.executor, "is_gpu_ready", return_value=True):
+    with (
+        patch.object(servicer.executor, "is_gpu_ready", return_value=True),
+        patch.object(
+            servicer.executor, "refresh_diagnostics", return_value=servicer.executor.diagnostics
+        ),
+    ):
         with pytest.raises(_Aborted) as exc:
             servicer.Compute(req, _context())
         assert exc.value.code == grpc.StatusCode.UNAVAILABLE
@@ -435,7 +464,12 @@ def test_service_run_benchmark_matmul_missing_cublas_returns_unavailable():
 
     req = BenchmarkRequest(benchmark=Benchmark.BENCH_MATMUL, size=100)
 
-    with patch.object(servicer.executor, "is_gpu_ready", return_value=True):
+    with (
+        patch.object(servicer.executor, "is_gpu_ready", return_value=True),
+        patch.object(
+            servicer.executor, "refresh_diagnostics", return_value=servicer.executor.diagnostics
+        ),
+    ):
         with pytest.raises(_Aborted) as exc:
             servicer.RunBenchmark(req, _context())
         assert exc.value.code == grpc.StatusCode.UNAVAILABLE

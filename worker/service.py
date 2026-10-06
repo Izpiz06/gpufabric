@@ -64,39 +64,51 @@ class GPUFabricServicer(GPUFabricServiceServicer):
         if not nvml_avail and not cupy_ready:
             return HealthState.UNAVAILABLE, "No GPU hardware or compute backend available."
 
+        state = HealthState.HEALTHY
+        issues = []
+
         if nvml_avail and not cupy_ready:
-            return (
-                HealthState.DEGRADED,
-                "GPU hardware detected by NVML, but CuPy compute backend is unavailable.",
-            )
+            state = HealthState.DEGRADED
+            issues.append("GPU hardware detected by NVML, but CuPy compute backend is unavailable.")
 
         if not nvml_avail and cupy_ready:
-            return HealthState.DEGRADED, "Compute backend ready, but NVML telemetry is unavailable."
+            state = HealthState.DEGRADED
+            issues.append("Compute backend ready, but NVML telemetry is unavailable.")
 
         diag = getattr(self.executor, "diagnostics", None)
-        if diag is not None and not diag.cublas_available:
-            missing_tag = (
-                f" ({', '.join(diag.missing_libraries)} not found)"
-                if diag.missing_libraries
-                else ""
-            )
-            return (
-                HealthState.DEGRADED,
-                f"cuBLAS library missing{missing_tag}. Accelerated matrix operations unavailable.",
-            )
+        if diag is not None and cupy_ready:
+            if not diag.cublas_available and hasattr(self.executor, "refresh_diagnostics"):
+                diag = self.executor.refresh_diagnostics(self.gpu)
+            if not diag.cublas_available:
+                state = HealthState.DEGRADED
+                missing_tag = (
+                    f" ({', '.join(diag.missing_libraries)} not found)"
+                    if diag.missing_libraries
+                    else ""
+                )
+                issues.append(
+                    f"cuBLAS library missing{missing_tag}. Accelerated matrix operations unavailable."
+                )
 
-        try:
-            count = self.gpu.device_count()
-            if count == 0:
-                return HealthState.UNAVAILABLE, "No GPU devices found."
-            for i in range(count):
-                status = self.gpu.get_status(i)
-                temp = status.get("temp", 0)
-                if temp >= 85:
-                    return HealthState.DEGRADED, f"GPU {i} temperature high ({temp}°C)."
-            return HealthState.HEALTHY, "All GPU systems operational."
-        except Exception as e:
-            return HealthState.DEGRADED, f"GPU telemetry error: {e}"
+        if nvml_avail:
+            try:
+                count = self.gpu.device_count()
+                if count == 0 and not cupy_ready:
+                    return HealthState.UNAVAILABLE, "No GPU devices found."
+                for i in range(count):
+                    status = self.gpu.get_status(i)
+                    temp = status.get("temp", 0)
+                    if temp >= 85:
+                        state = HealthState.DEGRADED
+                        issues.append(f"GPU {i} temperature high ({temp}°C).")
+            except Exception as e:
+                state = HealthState.DEGRADED
+                issues.append(f"GPU telemetry error: {e}")
+
+        if issues:
+            return state, " ".join(issues)
+
+        return HealthState.HEALTHY, "All GPU systems operational."
 
     def GetHealth(self, request, context) -> HealthResponse:
         self.state.heartbeat()

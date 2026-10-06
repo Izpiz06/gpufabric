@@ -5,7 +5,7 @@
 
 import logging
 import time
-from typing import Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 
@@ -182,6 +182,17 @@ class GPUExecutor:
             t1 = time.perf_counter()
             return gc.tolist(), (t1 - t0) * 1000.0, self.backend_name
 
+    def refresh_diagnostics(self, gpu_manager=None) -> Any:
+        """Re-probe CUDA environment and math libraries dynamically."""
+        self.diagnostics = probe_cuda_environment(gpu_manager, executor=self)
+        return self.diagnostics
+
+    def is_cublas_ready(self) -> bool:
+        """Check if cuBLAS is ready, re-probing once if previously marked unavailable."""
+        if not self.diagnostics.cublas_available:
+            self.refresh_diagnostics()
+        return self.diagnostics.cublas_available
+
     def compute(
         self, op: str, inputs: Sequence[np.ndarray], device_index: int = 0
     ) -> Tuple[np.ndarray, float, float]:
@@ -194,7 +205,7 @@ class GPUExecutor:
         validate_inputs(op, inputs)
         self._check_device(device_index)
 
-        if op == "matmul" and not self.diagnostics.cublas_available:
+        if op == "matmul" and not self.is_cublas_ready():
             missing_tag = (
                 f" ({', '.join(self.diagnostics.missing_libraries)} not found)"
                 if self.diagnostics.missing_libraries
@@ -262,7 +273,7 @@ class GPUExecutor:
             raise ValueError(f"repeats must be between 1 and {MAX_BENCHMARK_REPEATS}")
         self._check_device(device_index)
 
-        if name == "matmul" and not self.diagnostics.cublas_available:
+        if name == "matmul" and not self.is_cublas_ready():
             missing_tag = (
                 f" ({', '.join(self.diagnostics.missing_libraries)} not found)"
                 if self.diagnostics.missing_libraries
