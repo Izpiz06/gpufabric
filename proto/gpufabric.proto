@@ -78,7 +78,7 @@ message GPUStatusResponse {
   int32 active_tasks = 10;
   int32 power_usage_w = 11;
   int32 power_limit_w = 12;
-  bool available = 13;
+  optional bool available = 13;
   string current_workload = 14;
 }
 
@@ -168,7 +168,7 @@ message GPUDevice {
   int32 power_usage_w = 8;
   int32 power_limit_w = 9;
   int32 memory_utilization_pct = 10;
-  bool available = 11;
+  optional bool available = 11;
   string current_workload = 12;
 }
 
