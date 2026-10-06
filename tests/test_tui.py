@@ -321,3 +321,55 @@ def test_tui_degraded_worker_badge():
             assert entry.health_state == 2
 
     asyncio.run(_test())
+
+
+def test_tui_gpu_availability_display_states():
+    """Test all four GPUCard availability states: no status, omitted (unknown), true (ready), false (unavailable)."""
+
+    async def _test():
+        app = GPUFabricApp(
+            seed_workers=["192.168.1.50:50051"],
+            auto_discover_on_mount=False,
+        )
+        async with app.run_test():
+            resp = _make_mock_gpu_response("worker-alpha", gpus_count=1)
+            app._handle_refresh_results({"192.168.1.50:50051": (resp, None)})
+
+            avail_label = app.query_one("#avail-text", Label)
+
+            # 1. No status response -> "Syncing"
+            gpu_card = app.query_one(GPUCard)
+            gpu_card.update_telemetry(None)
+            assert "Syncing" in str(avail_label.render())
+
+            # 2. Status with omitted available field -> "Unknown" (pre-change worker)
+            status_omitted = GPUStatusResponse(
+                device_index=0,
+                gpu_utilization_pct=10,
+                temperature_c=50,
+            )
+            assert not status_omitted.HasField("available")
+            app._update_gpu_card_status("192.168.1.50:50051", status_omitted)
+            assert "Unknown" in str(avail_label.render())
+            assert "Busy" not in str(avail_label.render())
+
+            # 3. Explicit true -> "Ready"
+            status_ready = GPUStatusResponse(
+                device_index=0,
+                available=True,
+            )
+            assert status_ready.HasField("available")
+            app._update_gpu_card_status("192.168.1.50:50051", status_ready)
+            assert "Ready" in str(avail_label.render())
+
+            # 4. Explicit false -> "Unavailable"
+            status_unavail = GPUStatusResponse(
+                device_index=0,
+                available=False,
+            )
+            assert status_unavail.HasField("available")
+            app._update_gpu_card_status("192.168.1.50:50051", status_unavail)
+            assert "Unavailable" in str(avail_label.render())
+            assert "Busy" not in str(avail_label.render())
+
+    asyncio.run(_test())

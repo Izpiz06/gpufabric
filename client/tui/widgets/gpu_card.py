@@ -15,6 +15,29 @@ from textual.widgets import Label, ProgressBar, Select, Static
 from common.formatting import bytes_to_human
 
 
+def _get_status_availability(status: Optional[Any]) -> Optional[bool]:
+    """Returns True/False if availability is explicitly reported, or None if omitted/unknown."""
+    if status is None:
+        return None
+    if hasattr(status, "HasField"):
+        try:
+            if not status.HasField("available"):
+                return None
+            return bool(status.available)
+        except Exception:
+            pass
+    if isinstance(status, dict):
+        if "available" not in status or status["available"] is None:
+            return None
+        return bool(status["available"])
+    if hasattr(status, "available"):
+        val = getattr(status, "available", None)
+        if val is None:
+            return None
+        return bool(val)
+    return None
+
+
 class GPUCard(Widget):
     """Widget displaying live telemetry and hardware specifications for a selected GPU."""
 
@@ -286,7 +309,6 @@ class GPUCard(Widget):
             or getattr(gpu_spec, "current_workload", "")
             or "IDLE"
         )
-        available = getattr(status, "available", True)
 
         # Update UI elements
         vram_pct = int((used_vram / total_vram * 100)) if total_vram > 0 else 0
@@ -336,14 +358,16 @@ class GPUCard(Widget):
                 wl_text = Text(f"⚡ {workload}", style="bold cyan")
             self.query_one("#workload-text", Label).update(wl_text)
 
-            if status is not None:
-                av_text = (
-                    Text("✓ Ready", style="bold green")
-                    if available
-                    else Text("✗ Busy", style="bold red")
-                )
-            else:
+            if status is None:
                 av_text = Text("◌ Syncing", style="dim cyan")
+            else:
+                avail = _get_status_availability(status)
+                if avail is True:
+                    av_text = Text("✓ Ready", style="bold green")
+                elif avail is False:
+                    av_text = Text("✗ Unavailable", style="bold red")
+                else:
+                    av_text = Text("? Unknown", style="yellow")
             self.query_one("#avail-text", Label).update(av_text)
         except Exception:
             pass
