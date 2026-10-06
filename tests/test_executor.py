@@ -10,6 +10,7 @@ import pytest
 
 from worker.executor import (
     OPERATIONS,
+    CUDALibraryNotFoundError,
     GPUExecutionError,
     GPUExecutor,
     sample_inputs,
@@ -160,3 +161,66 @@ def test_run_benchmark_without_gpu():
     with patch.object(executor, "is_gpu_ready", return_value=False):
         with pytest.raises(GPUExecutionError):
             executor.run_benchmark("triad", 10)
+
+
+def test_compute_matmul_missing_cublas_raises_diagnostic_error():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    executor.diagnostics.cublas_available = False
+    executor.diagnostics.missing_libraries = ["libcublas.so.12"]
+
+    with patch.object(executor, "is_gpu_ready", return_value=True):
+        with pytest.raises(CUDALibraryNotFoundError) as exc:
+            executor.compute("matmul", [_f32(2, 2), _f32(2, 2)])
+        assert "libcublas.so.12" in str(exc.value)
+        assert "nvidia-cublas-cu12" in str(exc.value)
+
+
+def test_run_benchmark_matmul_missing_cublas_raises_diagnostic_error():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    executor.diagnostics.cublas_available = False
+    executor.diagnostics.missing_libraries = ["libcublas.so.12"]
+
+    with patch.object(executor, "is_gpu_ready", return_value=True):
+        with pytest.raises(CUDALibraryNotFoundError) as exc:
+            executor.run_benchmark("matmul", 10)
+        assert "libcublas.so.12" in str(exc.value)
+        assert "nvidia-cublas-cu12" in str(exc.value)
+
+
+def test_compute_matmul_runtime_library_error_wrapped():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    executor.diagnostics.cublas_available = True
+
+    mock_cp = MagicMock()
+    mock_cp.cuda.Device.return_value.__enter__.return_value = None
+    mock_cp.matmul.side_effect = OSError(
+        "libcublas.so.12: cannot open shared object file: No such file or directory"
+    )
+
+    with (
+        patch.dict("sys.modules", {"cupy": mock_cp}),
+        patch.object(executor, "is_gpu_ready", return_value=True),
+    ):
+        with pytest.raises(CUDALibraryNotFoundError) as exc:
+            executor.compute("matmul", [_f32(2, 2), _f32(2, 2)])
+        assert "libcublas.so.12" in str(exc.value)
+        assert executor.diagnostics.cublas_available is False
+        assert "libcublas.so.12" in executor.diagnostics.missing_libraries
+
+
+def test_warmup_skips_matmul_when_cublas_missing():
+    executor = GPUExecutor()
+    executor.device_count = 1
+    executor.diagnostics.cublas_available = False
+
+    with (
+        patch.object(executor, "is_gpu_ready", return_value=True),
+        patch.object(executor, "execute_vector_add", return_value=([2.0], 0.1, "cupy")),
+        patch.object(executor, "compute") as compute,
+    ):
+        executor.warmup()
+        # compute should still be called for other operations
+        assert compute.called

@@ -25,7 +25,12 @@ from common.gpufabric_pb2 import (
     WorkloadType,
 )
 from common.tensor import from_tensor, to_tensor
-from worker.executor import GPUExecutionError, GPUExecutor, GPUOutOfMemoryError
+from worker.executor import (
+    CUDALibraryNotFoundError,
+    GPUExecutionError,
+    GPUExecutor,
+    GPUOutOfMemoryError,
+)
 from worker.gpu import GPUManager
 from worker.service import GPUFabricServicer
 from worker.state import WorkerState
@@ -49,6 +54,7 @@ def test_service_health_healthy():
     state = WorkerState("worker-node-1")
     gpu = GPUManager()
     executor = GPUExecutor()
+    executor.diagnostics.cublas_available = True
     servicer = GPUFabricServicer(state, gpu, executor)
 
     with (
@@ -74,6 +80,26 @@ def test_service_health_healthy():
         assert "operational" in resp.health_details
 
 
+def test_service_health_degraded_cublas_missing():
+    state = WorkerState("worker-node-1")
+    gpu = GPUManager()
+    executor = GPUExecutor()
+    executor.diagnostics.cublas_available = False
+    executor.diagnostics.missing_libraries = ["libcublas.so.12"]
+    servicer = GPUFabricServicer(state, gpu, executor)
+
+    with (
+        patch.object(gpu, "is_available", return_value=True),
+        patch.object(gpu, "device_count", return_value=1),
+        patch.object(executor, "is_gpu_ready", return_value=True),
+    ):
+        mock_context = MagicMock()
+        resp = servicer.GetHealth(HealthRequest(), mock_context)
+        assert resp.health_state == HealthState.DEGRADED
+        assert "cuBLAS library missing" in resp.health_details
+        assert "libcublas.so.12" in resp.health_details
+
+
 def test_service_health_degraded_cupy_missing():
     state = WorkerState("worker-node-1")
     gpu = GPUManager()
@@ -95,6 +121,7 @@ def test_service_health_degraded_high_temp():
     state = WorkerState("worker-node-1")
     gpu = GPUManager()
     executor = GPUExecutor()
+    executor.diagnostics.cublas_available = True
     servicer = GPUFabricServicer(state, gpu, executor)
 
     with (
@@ -274,6 +301,7 @@ def test_service_compute_malformed_tensor():
         (ValueError("bad shape"), grpc.StatusCode.INVALID_ARGUMENT),
         (GPUOutOfMemoryError("oom"), grpc.StatusCode.RESOURCE_EXHAUSTED),
         (GPUExecutionError("no gpu"), grpc.StatusCode.UNAVAILABLE),
+        (CUDALibraryNotFoundError("libcublas.so missing"), grpc.StatusCode.UNAVAILABLE),
         (RuntimeError("driver"), grpc.StatusCode.INTERNAL),
     ],
 )
@@ -381,3 +409,34 @@ def test_state_multi_device_task_tracking():
     assert state.active_tasks == 0
     assert state.get_device_workload(0) == "IDLE"
     assert state.get_device_workload(1) == "IDLE"
+
+
+def test_service_compute_matmul_missing_cublas_returns_unavailable():
+    servicer = _servicer()
+    servicer.executor.device_count = 1
+    servicer.executor.diagnostics.cublas_available = False
+    servicer.executor.diagnostics.missing_libraries = ["libcublas.so.12"]
+
+    a = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    req = ComputeRequest(op=Operation.OP_MATMUL, inputs=[to_tensor(a), to_tensor(a)])
+
+    with patch.object(servicer.executor, "is_gpu_ready", return_value=True):
+        with pytest.raises(_Aborted) as exc:
+            servicer.Compute(req, _context())
+        assert exc.value.code == grpc.StatusCode.UNAVAILABLE
+        assert "libcublas.so.12" in str(exc.value)
+
+
+def test_service_run_benchmark_matmul_missing_cublas_returns_unavailable():
+    servicer = _servicer()
+    servicer.executor.device_count = 1
+    servicer.executor.diagnostics.cublas_available = False
+    servicer.executor.diagnostics.missing_libraries = ["libcublas.so.12"]
+
+    req = BenchmarkRequest(benchmark=Benchmark.BENCH_MATMUL, size=100)
+
+    with patch.object(servicer.executor, "is_gpu_ready", return_value=True):
+        with pytest.raises(_Aborted) as exc:
+            servicer.RunBenchmark(req, _context())
+        assert exc.value.code == grpc.StatusCode.UNAVAILABLE
+        assert "libcublas.so.12" in str(exc.value)
