@@ -46,10 +46,12 @@ dev = [
 gpufabric = "client.cli:main"
 gpufabric-client = "client.cli:main"
 gpufabric-worker = "worker.server:run_worker"
+gpufabric-host = "worker.tui:main"
 gpufabric-certs = "common.certs_cli:main"
 
-[tool.setuptools]
-packages = ["client", "worker", "common"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["client*", "worker*", "common*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

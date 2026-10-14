@@ -52,6 +52,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = p.add_subparsers(dest="command", help="Command")
 
+    p_host = sub.add_parser("host", help="Launch local host and GPU monitoring TUI")
+    p_host.add_argument("--worker-id", type=str, default=None, help="Custom worker identifier")
+    p_host.add_argument(
+        "--refresh",
+        type=float,
+        default=2.0,
+        help="Telemetry refresh interval in seconds (default: 2.0)",
+    )
+
     p_ls = sub.add_parser("ls", help="List every GPU on one or more workers")
     p_ls.add_argument(
         "workers",
@@ -155,6 +164,13 @@ def main():
             tls_dir=args.tls_dir,
             insecure=args.insecure,
         )
+        app.run()
+        return
+
+    if args.command == "host":
+        from worker.tui.app import GPUFabricHostApp
+
+        app = GPUFabricHostApp(worker_id=args.worker_id, refresh_interval=args.refresh)
         app.run()
         return
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
