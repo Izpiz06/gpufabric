@@ -109,6 +109,11 @@ def parse_args():
         action="store_true",
         help="Disable automatic LAN service advertisement (mDNS/DNS-SD)",
     )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch interactive local host monitoring TUI instead of running gRPC server",
+    )
     args = parser.parse_args()
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
@@ -117,6 +122,13 @@ def parse_args():
 
 def run_worker():
     args = parse_args()
+    if args.tui:
+        from worker.tui.app import GPUFabricHostApp
+
+        app = GPUFabricHostApp(worker_id=args.worker_id)
+        app.run()
+        return
+
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
