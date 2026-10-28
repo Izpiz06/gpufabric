@@ -1,0 +1,5 @@
+n,dtype,gpu_time_ms,round_trip_ms,full_recompute_ms,freivalds_k1_ms,freivalds_k3_ms,freivalds_k5_ms,simulated
+128,float32,0.1243,1.6243,0.0295,0.3055,0.1879,0.2443,true
+256,float32,0.1834,1.6834,0.1194,1.4843,1.483,1.618,true
+512,float32,0.8117,2.3117,0.6831,5.8402,5.9434,6.4766,true
+1024,float32,5.4413,6.9413,5.2422,9.3205,11.8404,14.5519,true

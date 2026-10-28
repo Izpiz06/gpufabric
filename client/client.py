@@ -6,7 +6,7 @@
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple, Union
 
 import grpc
 import numpy as np
@@ -14,6 +14,7 @@ import numpy as np
 from common.constants import DEFAULT_DISCOVERY_TIMEOUT, DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT
 
 if TYPE_CHECKING:
+    from client.verify import VerificationReport
     from common.discovery import DiscoveredWorker
 from common.gpufabric_pb2 import (
     Benchmark,
@@ -246,6 +247,24 @@ class GPUFabricClient:
             total_time_ms=resp.total_time_ms,
             round_trip_ms=round_trip_ms,
         )
+
+    def compute_verified(
+        self,
+        op: str,
+        *inputs,
+        mode: str = "fast",
+        rounds: int = 3,
+        device_index: int = 0,
+    ) -> Tuple[ComputeResult, "VerificationReport"]:
+        """Run an operation on the worker GPU and verify results against CPU references.
+
+        Returns (compute_result, verification_report).
+        """
+        from client.verify import verify_result
+
+        res = self.compute(op, *inputs, device_index=device_index)
+        report = verify_result(op, inputs, res.result, mode=mode, rounds=rounds)
+        return res, report
 
     def run_benchmark(
         self, name: str, size: int, repeats: int = 5, device_index: int = 0

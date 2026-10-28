@@ -8,7 +8,7 @@ import logging
 import sys
 from concurrent import futures
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import grpc
 
@@ -30,14 +30,17 @@ def create_grpc_server(
     max_workers: int = 10,
     max_message_mb: int = DEFAULT_MAX_MESSAGE_MB,
     warmup: bool = True,
+    fault_injector: Optional[Any] = None,
 ) -> grpc.Server:
     """Instantiate and configure the gRPC server."""
     state = WorkerState(worker_id=worker_id)
     gpu_mgr = GPUManager()
-    executor = GPUExecutor()
+    executor = GPUExecutor(fault_injector=fault_injector)
     executor.diagnostics = probe_cuda_environment(gpu_mgr, executor)
 
     logger.info("Worker Diagnostics:\n%s", executor.diagnostics.summary())
+    if fault_injector is not None and getattr(fault_injector, "is_active", False):
+        logger.warning("FAULT INJECTION ACTIVE: research use only")
 
     if warmup:
         executor.warmup()
@@ -114,6 +117,31 @@ def parse_args():
         action="store_true",
         help="Launch interactive local host monitoring TUI instead of running gRPC server",
     )
+    parser.add_argument(
+        "--inject-fault",
+        type=str,
+        default="none",
+        choices=["none", "random_elements", "bitflip", "zeros", "stale", "scale"],
+        help="Inject computational faults into GPU outputs (research evaluation only)",
+    )
+    parser.add_argument(
+        "--fault-rate",
+        type=float,
+        default=0.001,
+        help="Fraction of output elements to corrupt (default: 0.001)",
+    )
+    parser.add_argument(
+        "--fault-magnitude",
+        type=float,
+        default=1.0,
+        help="Relative corruption magnitude (default: 1.0)",
+    )
+    parser.add_argument(
+        "--fault-seed",
+        type=int,
+        default=None,
+        help="Random seed for deterministic fault injection",
+    )
     args = parser.parse_args()
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
@@ -140,10 +168,23 @@ def run_worker():
         logger.error(f"{e} Or pass --insecure to run without TLS.")
         sys.exit(2)
 
+    fault_injector = None
+    if args.inject_fault != "none":
+        from worker.faults import FaultInjector
+
+        logger.warning("FAULT INJECTION ACTIVE: research use only")
+        fault_injector = FaultInjector(
+            mode=args.inject_fault,
+            rate=args.fault_rate,
+            magnitude=args.fault_magnitude,
+            seed=args.fault_seed,
+        )
+
     server = create_grpc_server(
         worker_id=args.worker_id,
         max_message_mb=args.max_message_mb,
         warmup=not args.no_warmup,
+        fault_injector=fault_injector,
     )
     bound_port = bind(server, bind_address, credentials)
     if credentials is None:

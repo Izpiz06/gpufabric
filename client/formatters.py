@@ -3,6 +3,8 @@
 
 """Rich UI formatters for client CLI outputs."""
 
+from typing import Any, Optional
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -133,7 +135,18 @@ def print_execution(resp: ExecuteResponse):
             )
 
 
-def print_compute(op: str, res, rel_error: float, verified: bool):
+def print_compute(
+    op: str,
+    res,
+    rel_error: Any = None,
+    verified: Optional[bool] = None,
+    report: Optional[Any] = None,
+):
+    if hasattr(rel_error, "method") and hasattr(rel_error, "passed"):
+        report = rel_error
+        rel_error = None
+        verified = report.passed
+
     t = Table(title="Compute Result")
     t.add_column("Property", style="cyan")
     t.add_column("Value", style="bold")
@@ -144,11 +157,24 @@ def print_compute(op: str, res, rel_error: float, verified: bool):
     t.add_row("GPU kernel time", f"{res.gpu_time_ms:.4f} ms")
     t.add_row("Worker total time", f"{res.total_time_ms:.4f} ms")
     t.add_row("Round trip time", f"{res.round_trip_ms:.4f} ms")
-    t.add_row("Max relative error", f"{rel_error:.2e}")
-    t.add_row(
-        "Verified vs numpy",
-        "[green]PASS[/green]" if verified else "[red]FAIL[/red]",
-    )
+
+    if report is not None:
+        t.add_row("Verification method", report.method)
+        t.add_row("Verification time", f"{report.time_ms:.4f} ms")
+        t.add_row("Verification detail", report.detail)
+        status_str = (
+            "[yellow]SKIPPED[/yellow]"
+            if report.method == "none"
+            else ("[green]PASS[/green]" if report.passed else "[red]FAIL[/red]")
+        )
+        t.add_row("Verification status", status_str)
+    else:
+        if rel_error is not None:
+            t.add_row("Max relative error", f"{rel_error:.2e}")
+        t.add_row(
+            "Verified vs numpy",
+            "[green]PASS[/green]" if verified else "[red]FAIL[/red]",
+        )
     console.print(t)
 
 

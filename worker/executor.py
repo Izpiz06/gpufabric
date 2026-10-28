@@ -5,7 +5,7 @@
 
 import logging
 import time
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -108,9 +108,10 @@ class GPUExecutor:
 
     backend_name = "cupy"
 
-    def __init__(self):
+    def __init__(self, fault_injector: Optional[Any] = None):
         self.device_count = 0
         self.diagnostics = probe_cuda_environment(executor=self)
+        self.fault_injector = fault_injector
         self._detect()
 
     def _detect(self) -> None:
@@ -230,6 +231,8 @@ class GPUExecutor:
                 end.synchronize()
                 gpu_ms = cp.cuda.get_elapsed_time(start, end)
                 result = cp.asnumpy(out)
+                if self.fault_injector is not None:
+                    result = self.fault_injector.inject(result)
                 total_ms = (time.perf_counter() - t0) * 1000.0
         except Exception as e:
             err_msg = str(e)

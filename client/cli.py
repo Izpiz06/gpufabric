@@ -108,6 +108,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_comp.add_argument("--dtype", choices=["float32", "float64"], default="float32")
     p_comp.add_argument("--device", type=int, default=0, help="Device index (default: 0)")
     p_comp.add_argument("--seed", type=int, default=0, help="Random seed for the inputs")
+    p_comp.add_argument(
+        "--verify",
+        choices=["full", "fast", "none"],
+        default=None,
+        help="Verification mode: 'fast' (Freivalds/sampled), 'full' (CPU recompute), or 'none'",
+    )
+    p_comp.add_argument(
+        "--rounds",
+        type=int,
+        default=3,
+        help="Number of verification rounds for Freivalds (default: 3)",
+    )
 
     p_bench = sub.add_parser(
         "bench",

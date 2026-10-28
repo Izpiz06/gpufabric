@@ -23,7 +23,7 @@ from client.formatters import (
     print_inventory,
     print_status,
 )
-from client.verify import REFERENCE, relative_error, tolerance
+from client.verify import verify_result
 from common.constants import DEFAULT_DISCOVERY_TIMEOUT
 from common.gpufabric_pb2 import ListGPUsResponse
 
@@ -113,10 +113,14 @@ def cmd_compute(client: GPUFabricClient, args):
     with console.status("[bold green]Running on worker GPU..."):
         res = client.compute(args.op, *inputs, device_index=args.device)
 
-    err = relative_error(res.result, REFERENCE[args.op](*inputs))
-    ok = err <= tolerance(args.op, dtype)
-    print_compute(args.op, res, err, ok)
-    if not ok:
+    verify_mode = getattr(args, "verify", None)
+    if verify_mode is None:
+        verify_mode = "fast" if (args.op == "matmul" and args.size >= 512) else "full"
+
+    rounds = getattr(args, "rounds", 3)
+    report = verify_result(args.op, inputs, res.result, mode=verify_mode, rounds=rounds)
+    print_compute(args.op, res, report=report)
+    if not report.passed:
         sys.exit(1)
 
 
