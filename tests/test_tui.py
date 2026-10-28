@@ -268,6 +268,37 @@ def test_benchmark_modal_interaction():
     asyncio.run(_test())
 
 
+def test_benchmark_modal_enter_key_triggers_run():
+    """Test that pressing Enter in BenchmarkModal initiates benchmark execution."""
+
+    async def _test():
+        modal = BenchmarkModal(
+            online_workers=["192.168.1.50:50051"],
+            default_target="192.168.1.50:50051",
+        )
+
+        app = GPUFabricApp(auto_discover_on_mount=False)
+        async with app.run_test() as pilot:
+            app.push_screen(modal)
+            await pilot.pause()
+
+            run_calls = []
+
+            def _fake_run_worker(*args, **kwargs):
+                run_calls.append((args, kwargs))
+
+            modal._run_benchmark_worker = _fake_run_worker
+
+            # Verify Enter key triggers execution when select/form is configured
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert len(run_calls) == 1
+            assert run_calls[0][0][0] == "192.168.1.50:50051"
+
+    asyncio.run(_test())
+
+
 def test_tui_power_and_workload_telemetry():
     """Test updating power draw and active workload on GPUCard."""
 

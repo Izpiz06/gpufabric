@@ -7,7 +7,7 @@ import math
 from typing import Any, Dict, List, Optional
 
 from rich.table import Table
-from textual import work
+from textual import events, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
@@ -23,6 +23,7 @@ class BenchmarkModal(ModalScreen):
 
     BINDINGS = [
         Binding("escape", "dismiss", "Close", show=True),
+        Binding("enter", "run_benchmark", "Run Benchmark", show=True),
     ]
 
     DEFAULT_CSS = """
@@ -162,7 +163,10 @@ class BenchmarkModal(ModalScreen):
 
             with Horizontal(classes="btn-row"):
                 yield Button(
-                    "Run Benchmark", variant="success", id="run-bench-btn", classes="action-btn"
+                    "Run Benchmark (Enter)",
+                    variant="success",
+                    id="run-bench-btn",
+                    classes="action-btn",
                 )
                 yield Button(
                     "Close (Esc)", variant="default", id="close-bench-btn", classes="action-btn"
@@ -172,7 +176,7 @@ class BenchmarkModal(ModalScreen):
         try:
             self.query_one("#bench-progress").display = False
             self.query_one("#bench-results-text", Static).update(
-                "[dim]Configure benchmark parameters above and click 'Run Benchmark'.[/dim]"
+                "[dim]Configure benchmark parameters above and press Enter (or click 'Run Benchmark').[/dim]"
             )
         except Exception:
             pass
@@ -190,6 +194,25 @@ class BenchmarkModal(ModalScreen):
         if event.button.id == "close-bench-btn":
             self.dismiss()
         elif event.button.id == "run-bench-btn":
+            self.start_benchmark()
+
+    def action_run_benchmark(self) -> None:
+        """Trigger benchmark execution."""
+        self.start_benchmark()
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Trigger benchmark execution when Enter is pressed in an input field."""
+        self.start_benchmark()
+
+    def on_key(self, event: events.Key) -> None:
+        """Intercept Enter key to execute benchmark unless an overlay or close button is active."""
+        if event.key == "enter":
+            if any(s.expanded for s in self.query(Select)):
+                return
+            if self.focused and getattr(self.focused, "id", None) == "close-bench-btn":
+                return
+            event.stop()
+            event.prevent_default()
             self.start_benchmark()
 
     def start_benchmark(self) -> None:
