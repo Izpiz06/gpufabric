@@ -142,6 +142,17 @@ def parse_args():
         default=None,
         help="Random seed for deterministic fault injection",
     )
+    parser.add_argument(
+        "--decoy",
+        action="store_true",
+        help="Run as a decoy honeypot worker node (does not require GPU hardware)",
+    )
+    parser.add_argument(
+        "--decoy-profile",
+        type=str,
+        default="RTX 4060 8GB",
+        help="Hardware profile to emulate when running in --decoy mode (default: 'RTX 4060 8GB')",
+    )
     args = parser.parse_args()
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
@@ -168,24 +179,36 @@ def run_worker():
         logger.error(f"{e} Or pass --insecure to run without TLS.")
         sys.exit(2)
 
-    fault_injector = None
-    if args.inject_fault != "none":
-        from worker.faults import FaultInjector
+    if args.decoy:
+        from worker.decoy import create_decoy_server
 
-        logger.warning("FAULT INJECTION ACTIVE: research use only")
-        fault_injector = FaultInjector(
-            mode=args.inject_fault,
-            rate=args.fault_rate,
-            magnitude=args.fault_magnitude,
-            seed=args.fault_seed,
+        logger.warning(
+            f"DECOY HONEYPOT ACTIVE: running honeypot worker emulation ({args.decoy_profile})"
         )
+        server = create_decoy_server(
+            worker_id=args.worker_id,
+            profile_name=args.decoy_profile,
+            max_message_mb=args.max_message_mb,
+        )
+    else:
+        fault_injector = None
+        if args.inject_fault != "none":
+            from worker.faults import FaultInjector
 
-    server = create_grpc_server(
-        worker_id=args.worker_id,
-        max_message_mb=args.max_message_mb,
-        warmup=not args.no_warmup,
-        fault_injector=fault_injector,
-    )
+            logger.warning("FAULT INJECTION ACTIVE: research use only")
+            fault_injector = FaultInjector(
+                mode=args.inject_fault,
+                rate=args.fault_rate,
+                magnitude=args.fault_magnitude,
+                seed=args.fault_seed,
+            )
+
+        server = create_grpc_server(
+            worker_id=args.worker_id,
+            max_message_mb=args.max_message_mb,
+            warmup=not args.no_warmup,
+            fault_injector=fault_injector,
+        )
     bound_port = bind(server, bind_address, credentials)
     if credentials is None:
         logger.warning(
