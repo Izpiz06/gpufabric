@@ -31,6 +31,7 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
   - [Step 2: Use the Client CLI](#step-2-use-the-client-cli)
   - [Step 3: Use the Python SDK](#step-3-use-the-python-sdk)
 - [💻 CLI Command Showcase](#-cli-command-showcase)
+- [🛡️ Trust Layer](#️-trust-layer)
 - [🧪 How to Test](#-how-to-test)
   - [1. Run Automated Unit Tests](#1-run-automated-unit-tests)
   - [2. Run Remote GPU Hardware Integration Tests](#2-run-remote-gpu-hardware-integration-tests)
@@ -335,6 +336,32 @@ Executing matmul on 192.168.1.50 (device 0, float32)...
   Round-Trip Time : 8.190 ms
   Verification    : PASSED (max relative error: 1.19e-07)
 ```
+
+---
+
+## 🛡️ Trust Layer
+
+Designed for non-dedicated lab environments where consumer GPUs (e.g., RTX 4060) operate without ECC memory. The Trust Layer provides lightweight $O(k \cdot n^2)$ Freivalds verification, honeypot decoys, canary tripwires, and a Beta-reputation model with automated Slurm drainage.
+
+### 3 Commands to Try It:
+
+1. **Run fast Freivalds verification on remote matrix multiplication ($O(k \cdot n^2)$ instead of full CPU recomputation):**
+   ```bash
+   python -m client compute <worker-ip> matmul --size 2000 --verify fast --rounds 3
+   ```
+
+2. **Launch a honeypot decoy worker (simulates realistic RTX 4060 telemetry, logs all unauthorized contacts, requires no GPU):**
+   ```bash
+   python -m worker --decoy --decoy-profile "RTX 4060 8GB"
+   ```
+
+3. **Inspect node & user trust scores or tail real-time security alerts:**
+   ```bash
+   python -m client trust show
+   python -m client alerts tail
+   ```
+
+*See [`docs/TRUST_LAYER.md`](docs/TRUST_LAYER.md) for full mathematical error bounds, threat models, and limitation disclosures.*
 
 ---
 

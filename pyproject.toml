@@ -34,6 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cupy = ["cupy-cuda12x>=13.0.0"]
+eval = ["matplotlib>=3.7.0"]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.3.0",
