@@ -80,6 +80,7 @@ def test_gpu_executor_hooks_fault_injector():
     mock_injector.inject.side_effect = lambda x: x + 999.0
 
     executor = GPUExecutor(fault_injector=mock_injector)
+    executor.device_count = 1
 
     mock_cp = MagicMock()
     mock_cp.cuda.Device.return_value.__enter__.return_value = None

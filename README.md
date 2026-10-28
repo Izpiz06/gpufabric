@@ -25,11 +25,13 @@ Turn networked machines with NVIDIA GPUs into a unified, high-performance GPU co
 - [Key Features](#-key-features)
 - [Architecture](#-architecture)
 - [Installation](#-installation)
+- [📚 CLI Manual & Setup Wizard](#-cli-manual--setup-wizard)
 - [📖 How to Use](#-how-to-use)
   - [Step 0: Setup Mutual TLS Certificates](#step-0-setup-mutual-tls-certificates-recommended)
   - [Step 1: Start the GPU Worker Node](#step-1-start-the-gpu-worker-node)
   - [Step 2: Use the Client CLI](#step-2-use-the-client-cli)
   - [Step 3: Use the Python SDK](#step-3-use-the-python-sdk)
+- [🖥️ Terminal User Interfaces (TUI)](#️-terminal-user-interfaces-tui)
 - [💻 CLI Command Showcase](#-cli-command-showcase)
 - [🛡️ Trust Layer](#️-trust-layer)
 - [🧪 How to Test](#-how-to-test)
@@ -109,6 +111,35 @@ pip install cupy-cuda13x
 > ```bash
 > pip install nvidia-cuda-runtime-cu12 nvidia-cuda-nvrtc-cu12 nvidia-cublas-cu12
 > ```
+
+---
+
+## 📚 CLI Manual & Setup Wizard
+
+GPU Fabric comes with a comprehensive built-in interactive manual and automated environment diagnostic:
+
+```bash
+# 1. View the interactive manual index & chapter navigation:
+gpufabric manual
+
+# 2. View the step-by-step first-time setup guide:
+gpufabric manual setup
+# Or using the shorthand:
+gpufabric setup
+
+# 3. Launch the automated hardware diagnostic and setup assistant:
+gpufabric manual -i
+# Or:
+gpufabric setup -i
+
+# 4. View topic-specific reference guides:
+gpufabric manual commands        # Full CLI command reference table & examples
+gpufabric manual worker          # Starting workers, flags, and systemd services
+gpufabric manual client          # Client CLI, environment variables & Python SDK
+gpufabric manual mtls            # Certificate hierarchy & SAN management
+gpufabric manual trust           # Trust Layer, Freivalds verification, and decoys
+gpufabric manual troubleshoot    # Port 50051 firewall, SAN mismatch, cuBLAS fixes
+```
 
 ---
 
@@ -294,6 +325,29 @@ with GPUFabricClient(host="192.168.1.50", port=50051) as client:
     vec_res = client.execute_vector_add(a=[1.0, 2.0, 3.0], b=[4.0, 5.0, 6.0])
     print("Vector Add Result:", list(vec_res.result))
 ```
+
+---
+
+## 🖥️ Terminal User Interfaces (TUI)
+
+GPU Fabric features two full-screen terminal user interfaces built on Textual:
+
+### 1. Client Multi-Node Dashboard (`gpufabric`)
+Monitor and control your entire GPU Fabric cluster from a single interactive dashboard:
+```bash
+gpufabric
+```
+- **Live Cluster View**: Lists all discovered LAN nodes, health states, and GPU counts.
+- **Hardware Telemetry**: Real-time VRAM allocation, GPU core load, power draw, and temperature.
+- **Interactive Remote Benchmark (`b`)**: Configure and trigger STREAM triad, matmul GFLOPS, and Monte Carlo Pi benchmarks directly from keyboard (select worker/benchmark and hit `Enter` to run).
+- **Auto-Discovery (`d`)**: Rescan the local network for new nodes.
+
+### 2. Standalone Host Monitoring TUI (`gpufabric host`)
+Monitor the local machine's physical GPU without requiring any network connections or remote workers:
+```bash
+gpufabric host
+```
+- Standalone host telemetry, GPU core load, VRAM breakdown, and CUDA/NVML diagnostics.
 
 ---
 
