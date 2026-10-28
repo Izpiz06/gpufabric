@@ -326,3 +326,13 @@ def cmd_alerts(args):
                 a.detail,
             )
         console.print(t)
+
+
+def cmd_manual(args):
+    from client.manual import show_manual
+
+    section = getattr(args, "section", None)
+    if getattr(args, "setup", False):
+        section = "setup"
+    interactive = getattr(args, "interactive", False)
+    show_manual(section=section, interactive=interactive)

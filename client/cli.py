@@ -19,6 +19,7 @@ from client.commands import (
     cmd_gpu,
     cmd_health,
     cmd_ls,
+    cmd_manual,
     cmd_status,
     cmd_trust,
 )
@@ -192,6 +193,72 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_alerts_tail.add_argument("--kind", type=str, default=None, help="Filter by alert kind")
 
+    manual_choices = [
+        "setup",
+        "worker",
+        "client",
+        "commands",
+        "mtls",
+        "trust",
+        "troubleshoot",
+        "interactive",
+        "all",
+    ]
+
+    p_man = sub.add_parser(
+        "manual",
+        help="Interactive user manual, command reference, and first-time setup guide",
+    )
+    p_man.add_argument(
+        "section",
+        nargs="?",
+        default=None,
+        choices=manual_choices,
+        help="Manual section to view (default: overview and index)",
+    )
+    p_man.add_argument(
+        "--setup",
+        action="store_true",
+        help="Jump directly to the first-time setup guide",
+    )
+    p_man.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Launch interactive setup diagnostic and guided walkthrough",
+    )
+
+    p_guide = sub.add_parser("guide", help="Alias for 'manual'")
+    p_guide.add_argument(
+        "section",
+        nargs="?",
+        default=None,
+        choices=manual_choices,
+        help="Manual section to view",
+    )
+    p_guide.add_argument(
+        "--setup",
+        action="store_true",
+        help="Jump directly to the first-time setup guide",
+    )
+    p_guide.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Launch interactive setup diagnostic and guided walkthrough",
+    )
+
+    p_setup = sub.add_parser(
+        "setup",
+        help="First-time setup guide and interactive environment diagnostic",
+    )
+    p_setup.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Run the interactive setup assistant (default: displays setup guide)",
+    )
+
     return p
 
 
@@ -217,6 +284,15 @@ def main():
 
         app = GPUFabricHostApp(worker_id=args.worker_id, refresh_interval=args.refresh)
         app.run()
+        return
+
+    if args.command in ("manual", "guide"):
+        cmd_manual(args)
+        return
+
+    if args.command == "setup":
+        args.section = "setup"
+        cmd_manual(args)
         return
 
     if args.command == "trust":
