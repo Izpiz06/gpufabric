@@ -200,3 +200,129 @@ def cmd_bench(client: GPUFabricClient, args):
     print_bench_report(checks, sweep)
     if any(c.status == "FAIL" for c in checks):
         sys.exit(1)
+
+
+def cmd_trust(args):
+    from rich.table import Table
+
+    from common.trust import get_default_trust_store
+
+    store = get_default_trust_store()
+    if args.trust_action == "show":
+        if args.entity:
+            item = store.get_entity(args.entity)
+            if not item:
+                console.print(f"[yellow]Entity '{args.entity}' not found in trust store.[/yellow]")
+                return
+            t = Table(title=f"Trust Reputation: {args.entity}")
+            t.add_column("Property", style="cyan")
+            t.add_column("Value", style="bold")
+            t.add_row("Entity ID", item["entity_id"])
+            t.add_row("Entity Type", item["entity_type"])
+            t.add_row("Trust Score", f"{item['score']:.4f}")
+            state_style = (
+                "green"
+                if item["state"] == "HEALTHY"
+                else ("yellow" if item["state"] == "SUSPECT" else "red")
+            )
+            t.add_row("State", f"[{state_style}]{item['state']}[/{state_style}]")
+            t.add_row("Alpha (Passes)", f"{item['alpha']:.2f}")
+            t.add_row("Beta (Fails)", f"{item['beta']:.2f}")
+            t.add_row("Total Events", str(item["total_events"]))
+            t.add_row("Fail Count", str(item["fail_count"]))
+            t.add_row("Consecutive Passes", str(item["consecutive_passes"]))
+            t.add_row("Last Event", item["last_event_at"] or "N/A")
+            console.print(t)
+        else:
+            items = store.list_entities()
+            if not items:
+                console.print("[dim]No entities recorded in trust store yet.[/dim]")
+                return
+            t = Table(title="Trust Store Entities")
+            t.add_column("Entity ID", style="cyan")
+            t.add_column("Type")
+            t.add_column("Score", style="bold")
+            t.add_column("State")
+            t.add_column("Alpha/Beta")
+            t.add_column("Events")
+            t.add_column("Last Event")
+            for it in items:
+                state_style = (
+                    "green"
+                    if it["state"] == "HEALTHY"
+                    else ("yellow" if it["state"] == "SUSPECT" else "red")
+                )
+                t.add_row(
+                    it["entity_id"],
+                    it["entity_type"],
+                    f"{it['score']:.4f}",
+                    f"[{state_style}]{it['state']}[/{state_style}]",
+                    f"{it['alpha']:.1f} / {it['beta']:.1f}",
+                    str(it["total_events"]),
+                    it["last_event_at"] or "N/A",
+                )
+            console.print(t)
+
+    elif args.trust_action == "events":
+        events = store.get_events(args.entity, limit=args.limit)
+        if not events:
+            console.print("[dim]No trust events recorded yet.[/dim]")
+            return
+        t = Table(title=f"Trust Score History ({len(events)} events)")
+        t.add_column("Timestamp", style="dim")
+        t.add_column("Entity", style="cyan")
+        t.add_column("Event")
+        t.add_column("Weight")
+        t.add_column("Score Transition", style="bold")
+        t.add_column("State")
+        t.add_column("Detail")
+        for ev in events:
+            t.add_row(
+                ev["timestamp"][:19].replace("T", " "),
+                ev["entity"],
+                ev["event"],
+                f"{ev['weight']:.1f}",
+                f"{ev['old_score']:.3f} -> {ev['new_score']:.3f}",
+                f"{ev['old_state']} -> {ev['new_state']}",
+                ev["detail"] or "",
+            )
+        console.print(t)
+
+    elif args.trust_action == "reset":
+        ok = store.reset_entity(args.entity)
+        if ok:
+            console.print(f"[green]Successfully reset trust score for '{args.entity}'.[/green]")
+        else:
+            console.print(f"[yellow]Entity '{args.entity}' was not found in trust store.[/yellow]")
+
+
+def cmd_alerts(args):
+    from rich.table import Table
+
+    from common.alerts import get_default_alert_sink
+
+    sink = get_default_alert_sink()
+    if args.alerts_action == "tail":
+        alerts = sink.read_alerts(limit=args.limit, kind=args.kind)
+        if not alerts:
+            console.print("[dim]No security alerts logged.[/dim]")
+            return
+        t = Table(title=f"Security Alerts Tail ({len(alerts)} items)")
+        t.add_column("Timestamp", style="dim")
+        t.add_column("Kind", style="bold red")
+        t.add_column("Subject", style="cyan")
+        t.add_column("Peer")
+        t.add_column("Method")
+        t.add_column("Cert CN")
+        t.add_column("Detail")
+        for a in alerts:
+            t.add_row(
+                a.timestamp[:19].replace("T", " "),
+                a.kind,
+                a.subject,
+                a.peer,
+                a.method,
+                a.cert_cn,
+                a.detail,
+            )
+        console.print(t)

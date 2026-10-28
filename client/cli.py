@@ -11,6 +11,7 @@ from client import bench
 from client.client import OPERATIONS, GPUFabricClient, GPUFabricError
 from client.commands import (
     WORKERS_ENV,
+    cmd_alerts,
     cmd_bench,
     cmd_compute,
     cmd_discover,
@@ -19,6 +20,7 @@ from client.commands import (
     cmd_health,
     cmd_ls,
     cmd_status,
+    cmd_trust,
 )
 from client.formatters import console
 from common.constants import DEFAULT_MAX_MESSAGE_MB, DEFAULT_PORT, MAX_MESSAGE_MB_LIMIT
@@ -159,6 +161,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also double the triad size until GPU memory runs out",
     )
 
+    p_trust = sub.add_parser("trust", help="Inspect and manage node and user trust scores")
+    trust_sub = p_trust.add_subparsers(dest="trust_action", required=True)
+
+    p_trust_show = trust_sub.add_parser(
+        "show", help="Show reputation for an entity or all entities"
+    )
+    p_trust_show.add_argument(
+        "entity",
+        nargs="?",
+        default=None,
+        help="Entity ID e.g. node:worker-01 or user:izpiz",
+    )
+
+    p_trust_events = trust_sub.add_parser("events", help="Show chronological trust events")
+    p_trust_events.add_argument("entity", nargs="?", default=None, help="Optional entity ID filter")
+    p_trust_events.add_argument(
+        "--limit", type=int, default=50, help="Maximum events to display (default: 50)"
+    )
+
+    p_trust_reset = trust_sub.add_parser("reset", help="Reset an entity's trust score")
+    p_trust_reset.add_argument("entity", help="Entity ID to reset")
+
+    p_alerts = sub.add_parser("alerts", help="Security alert management")
+    alerts_sub = p_alerts.add_subparsers(dest="alerts_action", required=True)
+
+    p_alerts_tail = alerts_sub.add_parser("tail", help="Tail recent security alerts")
+    p_alerts_tail.add_argument(
+        "--limit", type=int, default=20, help="Number of alerts to show (default: 20)"
+    )
+    p_alerts_tail.add_argument("--kind", type=str, default=None, help="Filter by alert kind")
+
     return p
 
 
@@ -184,6 +217,14 @@ def main():
 
         app = GPUFabricHostApp(worker_id=args.worker_id, refresh_interval=args.refresh)
         app.run()
+        return
+
+    if args.command == "trust":
+        cmd_trust(args)
+        return
+
+    if args.command == "alerts":
+        cmd_alerts(args)
         return
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
