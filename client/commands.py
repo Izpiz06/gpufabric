@@ -48,6 +48,48 @@ def cmd_discover_lan(args, client_kwargs=None):
         f"[bold green]Searching for GPU Fabric workers on LAN (timeout {timeout:.1f}s)..."
     ):
         workers = GPUFabricClient.discover_lan(timeout=timeout, client_kwargs=client_kwargs)
+
+    # If mDNS discovered 0 workers, also probe any workers configured in GPUFABRIC_WORKERS
+    if not workers and os.environ.get(WORKERS_ENV):
+        env_workers = [w.strip() for w in os.environ[WORKERS_ENV].split(",") if w.strip()]
+        if env_workers:
+            from common.constants import DEFAULT_PORT
+            from common.discovery import DiscoveredWorker
+
+            console.print(
+                f"[dim]mDNS returned 0 workers. Probing configured ${WORKERS_ENV} ({', '.join(env_workers)})...[/dim]"
+            )
+            for w in env_workers:
+                target = w if ":" in w else f"{w}:{DEFAULT_PORT}"
+                h, p = target.split(":", 1)
+                kw = dict(client_kwargs or {})
+                kw.pop("port", None)
+                try:
+                    with GPUFabricClient(host=h, port=int(p), **kw) as c:
+                        health = c.health()
+                        workers.append(
+                            DiscoveredWorker(
+                                name=health.hostname or h,
+                                address=h,
+                                port=int(p),
+                                worker_id=health.worker_id or h,
+                                version=health.version,
+                                status="ONLINE" if health.status == "ok" else health.status.upper(),
+                                gpu_available=health.gpu_available,
+                            )
+                        )
+                except Exception as e:
+                    workers.append(
+                        DiscoveredWorker(
+                            name=h,
+                            address=h,
+                            port=int(p),
+                            worker_id=h,
+                            status="UNREACHABLE",
+                            error=str(e),
+                        )
+                    )
+
     print_discovered_workers(workers, timeout=timeout)
 
 

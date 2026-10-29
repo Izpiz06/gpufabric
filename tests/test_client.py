@@ -176,3 +176,40 @@ def test_client_error_keeps_status_code(grpc_server):
             client.matmul(np.ones((2, 3), np.float32), np.ones((2, 3), np.float32))
     assert exc.value.code == grpc.StatusCode.INVALID_ARGUMENT
     assert isinstance(exc.value.__cause__, grpc.RpcError)
+
+
+def test_cli_tui_subcommand_and_direct_worker_args(monkeypatch):
+    import sys
+
+    from client.cli import build_parser, main
+
+    # 1. build_parser parses 'tui'
+    parser = build_parser()
+    args = parser.parse_args(["tui", "192.168.1.10", "192.168.1.11:50051"])
+    assert args.command == "tui"
+    assert args.workers == ["192.168.1.10", "192.168.1.11:50051"]
+
+    # 2. main() with bare worker address e.g. `gpufabric 10.9.102.184`
+    captured_app = []
+
+    class MockApp:
+        def __init__(self, **kwargs):
+            captured_app.append(kwargs)
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr("client.tui.app.GPUFabricApp", MockApp)
+
+    monkeypatch.setattr(sys, "argv", ["gpufabric", "10.9.102.184"])
+    main()
+    assert len(captured_app) == 1
+    assert captured_app[0]["seed_workers"] == ["10.9.102.184"]
+
+    # 3. main() with explicit `gpufabric tui 10.9.102.184`
+    captured_app.clear()
+    monkeypatch.setattr(sys, "argv", ["gpufabric", "tui", "10.9.102.184:50051"])
+    main()
+    assert len(captured_app) == 1
+    assert captured_app[0]["seed_workers"] == ["10.9.102.184:50051"]
+

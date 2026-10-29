@@ -9,6 +9,7 @@ from unittest.mock import patch
 from textual.widgets import Input, Label, Select, Static
 
 from client.tui.app import GPUFabricApp
+from client.tui.screens.add_worker import AddWorkerModal
 from client.tui.screens.benchmark import BenchmarkModal
 from client.tui.screens.details import DetailsModal
 from client.tui.widgets.gpu_card import GPUCard
@@ -402,5 +403,33 @@ def test_tui_gpu_availability_display_states():
             app._update_gpu_card_status("192.168.1.50:50051", status_unavail)
             assert "Unavailable" in str(avail_label.render())
             assert "Busy" not in str(avail_label.render())
+
+    asyncio.run(_test())
+
+
+def test_tui_add_worker_modal():
+    """Test AddWorkerModal displays and allows adding a worker target."""
+
+    async def _test():
+        app = GPUFabricApp(auto_discover_on_mount=False)
+        async with app.run_test() as pilot:
+            # Trigger add worker action
+            app.action_add_worker()
+            await pilot.pause()
+
+            # Ensure modal is on top
+            assert isinstance(app.screen, AddWorkerModal)
+            input_widget = app.screen.query_one("#worker-address-input", Input)
+            input_widget.value = "10.9.102.184:50051"
+
+            # Submit
+            await pilot.press("enter")
+            await pilot.pause()
+
+            # Modal dismissed and worker added to known workers
+            assert not isinstance(app.screen, AddWorkerModal)
+            assert "10.9.102.184:50051" in app.known_workers
+            table = app.query_one(WorkerTable)
+            assert "10.9.102.184:50051" in table.worker_entries
 
     asyncio.run(_test())

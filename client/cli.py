@@ -55,6 +55,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = p.add_subparsers(dest="command", help="Command")
 
+    p_tui = sub.add_parser(
+        "tui", help="Launch interactive cluster and GPU monitoring TUI"
+    )
+    p_tui.add_argument(
+        "workers",
+        nargs="*",
+        help="Optional worker addresses (host or host:port) to connect to",
+    )
+
     p_host = sub.add_parser("host", help="Launch local host and GPU monitoring TUI")
     p_host.add_argument("--worker-id", type=str, default=None, help="Custom worker identifier")
     p_host.add_argument(
@@ -263,18 +272,45 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main():
+    known_commands = {
+        "host",
+        "tui",
+        "ls",
+        "discover",
+        "health",
+        "gpu",
+        "status",
+        "execute",
+        "compute",
+        "bench",
+        "trust",
+        "alerts",
+        "manual",
+        "guide",
+        "setup",
+    }
+    # If the user passed target worker arguments directly without a subcommand
+    # (e.g. `gpufabric 10.9.102.184`), route to `tui`
+    raw_args = sys.argv[1:]
+    non_flag_args = [a for a in raw_args if not a.startswith("-")]
+    if non_flag_args and non_flag_args[0] not in known_commands:
+        idx = raw_args.index(non_flag_args[0])
+        sys.argv = [sys.argv[0]] + raw_args[:idx] + ["tui"] + raw_args[idx:]
+
     parser = build_parser()
     args = parser.parse_args()
 
-    if not args.command:
+    if not args.command or args.command == "tui":
         from client.tui.app import GPUFabricApp
 
+        seed = getattr(args, "workers", None) or []
         app = GPUFabricApp(
             port=args.port,
             timeout=args.timeout,
             max_message_mb=args.max_message_mb,
             tls_dir=args.tls_dir,
             insecure=args.insecure,
+            seed_workers=seed,
         )
         app.run()
         return

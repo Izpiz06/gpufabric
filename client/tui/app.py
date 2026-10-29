@@ -33,6 +33,7 @@ class GPUFabricApp(App):
     SUB_TITLE = "Distributed GPU Monitoring & Control"
 
     BINDINGS = [
+        Binding("a", "add_worker", "Add Worker", show=True),
         Binding("d", "discover", "Discover LAN", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("enter", "details", "Details", show=True),
@@ -125,11 +126,13 @@ class GPUFabricApp(App):
         # Telemetry interval
         self.set_interval(1.5, self._on_telemetry_timer)
 
-        # Trigger startup discovery or refresh
+        # Trigger refresh on known seeded workers immediately
+        if self.known_workers:
+            self.action_refresh()
+
+        # Trigger startup discovery
         if self.auto_discover_on_mount:
             self.action_discover()
-        elif self.known_workers:
-            self.action_refresh()
 
     def _get_client_for_target(self, target: str) -> GPUFabricClient:
         if ":" in target:
@@ -145,6 +148,30 @@ class GPUFabricApp(App):
     # -------------------------------------------------------------------------
     # Actions & Background Workers
     # -------------------------------------------------------------------------
+
+    def action_add_worker(self) -> None:
+        """Prompt to manually connect to a worker by IP or hostname."""
+        from client.tui.screens.add_worker import AddWorkerModal
+
+        def _on_result(target: Optional[str]) -> None:
+            if not target:
+                return
+            full_target = target if ":" in target else f"{target}:{self.port}"
+            if full_target not in self.known_workers:
+                self.known_workers[full_target] = WorkerEntry(
+                    target=full_target,
+                    name=full_target.split(":")[0],
+                    worker_id="",
+                    status="CONNECTING",
+                    gpu_count=0,
+                    compute_ready=False,
+                )
+            self.query_one(WorkerTable).update_workers(list(self.known_workers.values()))
+            self._update_header_metrics()
+            self.notify(f"Connecting to worker {full_target}...", title="Add Worker")
+            self._refresh_workers_task()
+
+        self.push_screen(AddWorkerModal(), _on_result)
 
     def action_discover(self) -> None:
         """Scan LAN for GPU Fabric workers."""
@@ -179,7 +206,10 @@ class GPUFabricApp(App):
                 error=cand.error or "",
             )
 
-        header.status_message = f"Discovery complete ({len(discovered)} found)"
+        if not discovered and not self.known_workers:
+            header.status_message = "No workers found via mDNS. Press [A] to add worker IP manually."
+        else:
+            header.status_message = f"Discovery complete ({len(discovered)} found)"
         self.query_one(WorkerTable).update_workers(list(self.known_workers.values()))
         self._update_header_metrics()
 

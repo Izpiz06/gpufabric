@@ -182,3 +182,26 @@ def test_cmd_discover_explicit_vs_lan(capsys):
         cmd_discover(None, args_lan, client_kwargs={"insecure": True})
         out = capsys.readouterr().out
         assert "auto-worker" in out or "GPU Fabric Workers" in out
+
+
+def test_cmd_discover_fallback_to_env_workers(capsys, monkeypatch):
+    monkeypatch.setenv("GPUFABRIC_WORKERS", "192.168.1.100")
+    args = MagicMock()
+    args.worker_ip = None
+    args.timeout = 0.5
+
+    mock_health = HealthResponse(
+        status="ok", worker_id="env-node", version="0.1.0", gpu_available=True, hostname="env-node"
+    )
+    with patch("client.commands.GPUFabricClient") as mock_client_cls:
+        mock_client_cls.discover_lan.return_value = []
+        instance = MagicMock()
+        instance.health.return_value = mock_health
+        instance.__enter__.return_value = instance
+        mock_client_cls.return_value = instance
+
+        cmd_discover(None, args, client_kwargs={"insecure": True})
+        out = capsys.readouterr().out
+        assert "env-node" in out
+        assert "192.168.1.100" in out
+

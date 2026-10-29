@@ -69,6 +69,17 @@ def get_local_ip_addresses(host: str = "0.0.0.0") -> List[str]:
     except Exception:
         pass
 
+    # Physical network adapter IPv4 addresses via system inspection
+    try:
+        from common.tls import detect_host_addresses
+
+        host_addrs = detect_host_addresses(include_localhost=False, include_hostname=False)
+        for addr in host_addrs:
+            if addr not in addresses and ":" not in addr:  # IPv4 only
+                addresses.append(addr)
+    except Exception:
+        pass
+
     # Hostname-associated interfaces
     try:
         _, _, ips = socket.gethostbyname_ex(socket.gethostname())
@@ -88,12 +99,12 @@ class _DiscoveryListener(ServiceListener):
         self.found_services: Dict[str, ServiceInfo] = {}
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        info = zc.get_service_info(type_, name)
+        info = zc.get_service_info(type_, name, timeout=2000)
         if info:
             self.found_services[name] = info
 
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
-        info = zc.get_service_info(type_, name)
+        info = zc.get_service_info(type_, name, timeout=2000)
         if info:
             self.found_services[name] = info
 

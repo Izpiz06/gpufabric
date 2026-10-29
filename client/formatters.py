@@ -54,9 +54,15 @@ def print_discovered_workers(workers, timeout: float = 3.0):
     """Format and print list of discovered LAN workers."""
     if not workers:
         console.print(
-            f"[yellow]No GPU Fabric workers discovered on the local network (timeout: {timeout:.1f}s).[/yellow]\n"
-            "[dim]Tip: Ensure worker machines are running on the same LAN subnet with discovery enabled, "
-            "or specify an address directly (e.g. `gpufabric discover <ip>`).[/dim]"
+            f"[yellow]No GPU Fabric workers discovered via mDNS (timeout: {timeout:.1f}s).[/yellow]\n"
+            "[dim]Possible reasons:\n"
+            "  • Wi-Fi Access Point isolation or router drops multicast UDP (port 5353)\n"
+            "  • Host and worker node are on different subnets / VLANs\n"
+            "  • Firewall (e.g. ufw / iptables) blocking incoming UDP 5353\n\n"
+            "Workarounds:\n"
+            "  • Query directly:    [cyan]gpufabric health <worker-ip>[/cyan] or [cyan]gpufabric discover <worker-ip>[/cyan]\n"
+            "  • Launch TUI with:   [cyan]gpufabric <worker-ip>[/cyan] or [cyan]gpufabric tui <worker-ip>[/cyan]\n"
+            "  • Set environment:   [cyan]export GPUFABRIC_WORKERS=<worker-ip>[/cyan][/dim]"
         )
         return
 
