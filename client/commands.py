@@ -509,3 +509,10 @@ def cmd_manual(args):
         section = "setup"
     interactive = getattr(args, "interactive", False)
     show_manual(section=section, interactive=interactive)
+
+
+def cmd_demo(args, client_kwargs=None):
+    from client.demo import run_showcase
+
+    run_showcase(args, client_kwargs=client_kwargs)
+

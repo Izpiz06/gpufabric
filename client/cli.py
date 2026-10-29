@@ -14,6 +14,7 @@ from client.commands import (
     cmd_alerts,
     cmd_bench,
     cmd_compute,
+    cmd_demo,
     cmd_discover,
     cmd_execute,
     cmd_gpu,
@@ -287,7 +288,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run the interactive setup assistant (default: displays setup guide)",
     )
 
+    p_demo = sub.add_parser(
+        "demo",
+        aliases=["showcase"],
+        help="Live demonstration of Trust Layer novelty (C1, C2, C3) for poster presentation",
+    )
+    p_demo.add_argument(
+        "--step",
+        "-s",
+        action="store_true",
+        help="Pause interactively between demonstration pillars (ideal for poster presentations)",
+    )
+    p_demo.add_argument(
+        "--matrix-size",
+        "-n",
+        type=int,
+        default=1024,
+        help="Matrix dimension for verification benchmark (default: 1024)",
+    )
+    p_demo.add_argument(
+        "--graph",
+        "-g",
+        action="store_true",
+        help="Generate publication-grade analytical line figure for poster presentation",
+    )
+    p_demo.add_argument(
+        "--output-graph",
+        type=Path,
+        default=Path("gpufabric_novelty_showcase.png"),
+        help="File path to save the generated poster figure (default: gpufabric_novelty_showcase.png)",
+    )
+
     return p
+
 
 
 def main():
@@ -307,6 +340,8 @@ def main():
         "manual",
         "guide",
         "setup",
+        "demo",
+        "showcase",
     }
     # Options at root parser level that take an argument value
     flags_with_value = {"--port", "--timeout", "--max-message-mb", "--tls-dir"}
@@ -376,6 +411,10 @@ def main():
 
     if args.command == "alerts":
         cmd_alerts(args)
+        return
+
+    if args.command in ("demo", "showcase"):
+        cmd_demo(args)
         return
     if not 1 <= args.max_message_mb <= MAX_MESSAGE_MB_LIMIT:
         parser.error(f"--max-message-mb must be between 1 and {MAX_MESSAGE_MB_LIMIT}")
