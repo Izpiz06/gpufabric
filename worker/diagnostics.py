@@ -106,10 +106,50 @@ def _extract_missing_library_names(error_str: str) -> List[str]:
     return [match for match in _LIB_EXT_RE.findall(error_str) if match]
 
 
+def preload_nvidia_pip_libraries() -> List[str]:
+    """Find and preload nvidia-* pip packages shared libraries (e.g. libcublas) into global symbol table."""
+    import site
+    import sys
+    from pathlib import Path
+
+    loaded = []
+    search_dirs = []
+    try:
+        search_dirs.extend(site.getsitepackages())
+    except Exception:
+        pass
+    if hasattr(site, "getusersitepackages"):
+        try:
+            search_dirs.append(site.getusersitepackages())
+        except Exception:
+            pass
+    for sp in sys.path:
+        if "site-packages" in sp and sp not in search_dirs:
+            search_dirs.append(sp)
+
+    for d in search_dirs:
+        nvidia_dir = Path(d) / "nvidia"
+        if not nvidia_dir.is_dir():
+            continue
+
+        so_files = list(nvidia_dir.glob("*/lib/*.so*"))
+        # Load dependencies like cublasLt before cublas
+        for so in sorted(
+            so_files, key=lambda x: ("cublaslt" not in x.name.lower(), x.name)
+        ):
+            try:
+                ctypes.CDLL(str(so), mode=ctypes.RTLD_GLOBAL)
+                loaded.append(so.name)
+            except Exception:
+                pass
+    return loaded
+
+
 def probe_cuda_environment(
     gpu_manager: Optional[Any] = None, executor: Optional[Any] = None
 ) -> CudaDiagnostics:
     """Proactively probe GPU hardware, NVML, CUDA runtime, CuPy backend, and cuBLAS library."""
+    preload_nvidia_pip_libraries()
     diag = CudaDiagnostics()
 
     # 1. Probe NVML and GPU hardware
@@ -176,7 +216,10 @@ def probe_cuda_environment(
             with cp.cuda.Device(0):
                 cublas = getattr(cp.cuda, "cublas", None)
                 if cublas is None:
-                    import cupy.cuda.cublas as cublas
+                    try:
+                        from cupy_backends.cuda.libs import cublas
+                    except ImportError:
+                        import cupy.cuda.cublas as cublas
 
                 handle = cublas.create()
                 try:

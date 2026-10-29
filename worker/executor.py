@@ -9,7 +9,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from worker.diagnostics import _extract_missing_library_names, probe_cuda_environment
+from worker.diagnostics import (
+    _extract_missing_library_names,
+    preload_nvidia_pip_libraries,
+    probe_cuda_environment,
+)
 
 logger = logging.getLogger("gpufabric.worker.executor")
 

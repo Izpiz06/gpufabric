@@ -289,13 +289,33 @@ def main():
         "guide",
         "setup",
     }
+    # Options at root parser level that take an argument value
+    flags_with_value = {"--port", "--timeout", "--max-message-mb", "--tls-dir"}
+
     # If the user passed target worker arguments directly without a subcommand
-    # (e.g. `gpufabric 10.9.102.184`), route to `tui`
+    # (e.g. `gpufabric 10.9.102.184` or `gpufabric --port 50051 10.9.102.184`), route to `tui`
     raw_args = sys.argv[1:]
-    non_flag_args = [a for a in raw_args if not a.startswith("-")]
-    if non_flag_args and non_flag_args[0] not in known_commands:
-        idx = raw_args.index(non_flag_args[0])
-        sys.argv = [sys.argv[0]] + raw_args[:idx] + ["tui"] + raw_args[idx:]
+    skip_next = False
+    first_pos_idx = None
+    for idx, token in enumerate(raw_args):
+        if skip_next:
+            skip_next = False
+            continue
+        if token in flags_with_value:
+            skip_next = True
+            continue
+        if token.startswith("-"):
+            continue
+        first_pos_idx = idx
+        break
+
+    if first_pos_idx is not None and raw_args[first_pos_idx] not in known_commands:
+        sys.argv = (
+            [sys.argv[0]]
+            + raw_args[:first_pos_idx]
+            + ["tui"]
+            + raw_args[first_pos_idx:]
+        )
 
     parser = build_parser()
     args = parser.parse_args()
