@@ -170,6 +170,25 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also double the triad size until GPU memory runs out",
     )
+    p_bench.add_argument(
+        "--plot",
+        dest="plot",
+        action="store_true",
+        default=True,
+        help="Generate analytical performance graph (default: True)",
+    )
+    p_bench.add_argument(
+        "--no-plot",
+        dest="plot",
+        action="store_false",
+        help="Disable automatic benchmark graph generation",
+    )
+    p_bench.add_argument(
+        "--plot-path",
+        type=Path,
+        default=None,
+        help="Custom file path for generated graph (default: benchmarks/benchmark_<target>_<time>.png)",
+    )
 
     p_trust = sub.add_parser("trust", help="Inspect and manage node and user trust scores")
     trust_sub = p_trust.add_subparsers(dest="trust_action", required=True)

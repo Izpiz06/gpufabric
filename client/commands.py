@@ -214,32 +214,163 @@ def cmd_bench(client: GPUFabricClient, args):
 
     checks = []
     with console.status("[bold green]Measuring end-to-end network throughput..."):
-        median, _, verified = bench.measure_network(
-            client, args.network_size, args.network_repeats, args.device
+        median, _, verified, net_history = bench.measure_network(
+            client, args.network_size, args.network_repeats, args.device, return_history=True
         )
     checks.append(bench.check_network(median, args.min_network_mb_s, verified))
 
     triad_size = args.triad_size or bench.auto_triad_size(gpu.free_vram_bytes)
     with console.status(f"[bold green]GPU triad on {triad_size:,} elements..."):
-        r = client.run_benchmark("triad", triad_size, args.repeats, args.device)
+        r_triad = client.run_benchmark("triad", triad_size, args.repeats, args.device)
     checks.append(
-        bench.check_gpu_bandwidth(r.bandwidth_gb_s, r.peak_bandwidth_gb_s, args.min_gpu_bw_pct)
+        bench.check_gpu_bandwidth(
+            r_triad.bandwidth_gb_s, r_triad.peak_bandwidth_gb_s, args.min_gpu_bw_pct
+        )
     )
 
     with console.status(f"[bold green]Matmul {args.matmul_size}x{args.matmul_size}..."):
-        r = client.run_benchmark("matmul", args.matmul_size, args.repeats, args.device)
-    checks.append(bench.matmul_info(r.gflops, args.matmul_size))
+        r_matmul = client.run_benchmark("matmul", args.matmul_size, args.repeats, args.device)
+    checks.append(bench.matmul_info(r_matmul.gflops, args.matmul_size))
 
     with console.status(f"[bold green]Monte Carlo pi with {args.pi_samples:,} points..."):
-        r = client.run_benchmark("monte_carlo_pi", args.pi_samples, args.repeats, args.device)
-    checks.append(bench.check_pi(r.pi_estimate, args.pi_samples * r.repeats))
+        r_pi = client.run_benchmark("monte_carlo_pi", args.pi_samples, args.repeats, args.device)
+    checks.append(bench.check_pi(r_pi.pi_estimate, args.pi_samples * r_pi.repeats))
 
     sweep = None
+    triad_points = []
     if args.sweep:
         with console.status("[bold green]Sweeping triad size up to the VRAM limit..."):
             sweep = bench.sweep_triad(client, gpu.free_vram_bytes, args.device)
+            for sz, bw, note in sweep:
+                if bw is not None:
+                    triad_points.append(
+                        {
+                            "elements": sz,
+                            "vram_mb": sz * 12 / 1e6,
+                            "bandwidth_gb_s": bw,
+                            "latency_ms": (sz * 12 / (bw * 1e9)) * 1000.0,
+                        }
+                    )
+    else:
+        # Multi-scale progression for analytical curve
+        scale_factors = [0.25, 0.5, 1.0]
+        for factor in scale_factors:
+            s_elem = max(100_000, int(triad_size * factor))
+            if s_elem == triad_size:
+                r_scale = r_triad
+            else:
+                try:
+                    r_scale = client.run_benchmark("triad", s_elem, 3, args.device)
+                except Exception:
+                    continue
+            triad_points.append(
+                {
+                    "elements": s_elem,
+                    "vram_mb": s_elem * 12 / 1e6,
+                    "bandwidth_gb_s": r_scale.bandwidth_gb_s,
+                    "latency_ms": r_scale.best_ms,
+                }
+            )
+
+    # Multi-point scaling for matmul
+    matmul_points = []
+    sample_sizes = sorted(
+        set([s for s in [256, 512, 1024, args.matmul_size] if s <= args.matmul_size])
+    )
+    for sz in sample_sizes:
+        if sz == args.matmul_size:
+            r_sz = r_matmul
+        else:
+            try:
+                r_sz = client.run_benchmark("matmul", sz, 3, args.device)
+            except Exception:
+                continue
+        matmul_points.append(
+            {
+                "size": sz,
+                "gflops": r_sz.gflops,
+                "latency_ms": r_sz.best_ms,
+            }
+        )
 
     print_bench_report(checks, sweep)
+
+    # Generate analytical graph
+    should_plot = getattr(args, "plot", True)
+    if should_plot:
+        from client.plot import generate_benchmark_plot
+
+        workload_latencies = {
+            "Network Triad": {
+                "total_ms": net_history[0]["round_trip_ms"] if net_history else 0.0,
+                "gpu_ms": net_history[0].get("gpu_time_ms", 0.0) if net_history else 0.0,
+            },
+            "GPU Triad": {
+                "total_ms": r_triad.best_ms,
+                "gpu_ms": r_triad.best_ms,
+            },
+            "Matmul": {
+                "total_ms": r_matmul.best_ms,
+                "gpu_ms": r_matmul.best_ms,
+            },
+            "Monte Carlo Pi": {
+                "total_ms": r_pi.best_ms,
+                "gpu_ms": r_pi.best_ms,
+            },
+        }
+        # Calculate compliance percentages for acceptance profile
+        mc_total_samples = args.pi_samples * r_pi.repeats
+        mc_allowed_err = bench.PI_SIGMAS * bench.PI_SAMPLE_STD / np.sqrt(mc_total_samples)
+        mc_obs_err = abs(r_pi.pi_estimate - np.pi)
+        bw_min_thresh = (
+            r_triad.peak_bandwidth_gb_s * (args.min_gpu_bw_pct / 100.0)
+            if r_triad.peak_bandwidth_gb_s > 0
+            else r_triad.bandwidth_gb_s
+        )
+
+        compliance_data = {
+            "Network Throughput": {
+                "measured": median,
+                "threshold": args.min_network_mb_s,
+                "pct": (median / args.min_network_mb_s) * 100.0,
+            },
+            "Memory Bandwidth": {
+                "measured": r_triad.bandwidth_gb_s,
+                "threshold": bw_min_thresh,
+                "pct": (r_triad.bandwidth_gb_s / max(0.001, bw_min_thresh)) * 100.0,
+            },
+            "Monte Carlo Accuracy": {
+                "measured": mc_obs_err,
+                "threshold": mc_allowed_err,
+                "pct": (mc_allowed_err / max(1e-9, mc_obs_err)) * 100.0,
+            },
+        }
+
+        with console.status("[bold green]Generating analytical benchmark graph..."):
+            plot_file = generate_benchmark_plot(
+                target=client.target,
+                gpu_name=gpu.name,
+                driver_version=inventory.driver_version,
+                cuda_version=getattr(inventory, "cuda_version", ""),
+                network_history=net_history,
+                triad_data=triad_points,
+                matmul_data=matmul_points,
+                monte_carlo_data={
+                    "samples": mc_total_samples,
+                    "estimate": r_pi.pi_estimate,
+                    "latency_ms": r_pi.best_ms,
+                },
+                workload_latencies=workload_latencies,
+                output_path=getattr(args, "plot_path", None),
+                peak_bandwidth_gb_s=r_triad.peak_bandwidth_gb_s,
+                compliance_data=compliance_data,
+            )
+        if plot_file:
+            abs_plot = plot_file.resolve()
+            console.print(
+                f"[bold green]✓ Benchmark analytical graph generated:[/bold green] [cyan]{abs_plot}[/cyan]"
+            )
+
     if any(c.status == "FAIL" for c in checks):
         sys.exit(1)
 

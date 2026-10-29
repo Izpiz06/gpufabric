@@ -89,3 +89,59 @@ def test_sweep_reraises_other_errors():
     client.run_benchmark.side_effect = GPUFabricError("down", code=grpc.StatusCode.UNAVAILABLE)
     with pytest.raises(GPUFabricError):
         bench.sweep_triad(client, free_vram_bytes=10**12)
+
+
+def test_measure_network_returns_history():
+    median, best, verified, history = bench.measure_network(
+        _fake_triad_client(), 250_000, repeats=3, return_history=True
+    )
+    assert verified is True
+    assert len(history) == 3
+    assert history[0]["trial"] == 1
+    assert "throughput_mb_s" in history[0]
+    assert "round_trip_ms" in history[0]
+    assert "network_time_ms" in history[0]
+
+
+def test_generate_benchmark_plot(tmp_path):
+    from client.plot import generate_benchmark_plot
+
+    out_file = tmp_path / "test_bench_plot.png"
+    net_history = [
+        {"trial": 1, "throughput_mb_s": 25.0, "round_trip_ms": 40.0, "gpu_time_ms": 1.0},
+        {"trial": 2, "throughput_mb_s": 30.0, "round_trip_ms": 35.0, "gpu_time_ms": 1.0},
+    ]
+    triad_data = [
+        {"elements": 1_000_000, "vram_mb": 12.0, "bandwidth_gb_s": 120.0, "latency_ms": 0.1},
+        {"elements": 2_000_000, "vram_mb": 24.0, "bandwidth_gb_s": 125.0, "latency_ms": 0.19},
+    ]
+    matmul_data = [
+        {"size": 256, "gflops": 500.0, "latency_ms": 0.06},
+        {"size": 512, "gflops": 3000.0, "latency_ms": 0.08},
+    ]
+    mc_data = {"samples": 100_000_000, "estimate": 3.14159, "latency_ms": 10.0}
+    latencies = {
+        "Network Triad": {"total_ms": 35.0, "gpu_ms": 1.0},
+        "GPU Triad": {"total_ms": 0.19, "gpu_ms": 0.19},
+    }
+
+    res_path = generate_benchmark_plot(
+        target="192.168.1.50:50051",
+        gpu_name="NVIDIA RTX 4090",
+        driver_version="550.54.14",
+        cuda_version="12.4",
+        network_history=net_history,
+        triad_data=triad_data,
+        matmul_data=matmul_data,
+        monte_carlo_data=mc_data,
+        workload_latencies=latencies,
+        output_path=out_file,
+        peak_bandwidth_gb_s=1008.0,
+    )
+    assert res_path is not None
+    assert res_path.exists()
+    assert res_path.stat().st_size > 0
+    # Also verify companion SVG
+    svg_file = out_file.with_suffix(".svg")
+    assert svg_file.exists()
+

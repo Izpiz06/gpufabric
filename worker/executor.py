@@ -11,7 +11,6 @@ import numpy as np
 
 from worker.diagnostics import (
     _extract_missing_library_names,
-    preload_nvidia_pip_libraries,
     probe_cuda_environment,
 )
 

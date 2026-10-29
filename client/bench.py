@@ -78,12 +78,16 @@ def matmul_info(gflops: float, size: int) -> Check:
 
 
 def measure_network(
-    client: GPUFabricClient, size: int, repeats: int, device_index: int = 0
-) -> Tuple[float, float, bool]:
+    client: GPUFabricClient,
+    size: int,
+    repeats: int,
+    device_index: int = 0,
+    return_history: bool = False,
+):
     """End-to-end triad: send b and c, get a back, over the real network.
 
-    Returns (median MB/s, best MB/s, result verified). Throughput counts the
-    bytes sent plus received divided by the client-side round-trip time,
+    Returns (median MB/s, best MB/s, result verified) or with history dicts if return_history=True.
+    Throughput counts the bytes sent plus received divided by the client-side round-trip time,
     so it reflects what a client actually gets.
     """
     rng = np.random.default_rng(0)
@@ -91,13 +95,26 @@ def measure_network(
     c = rng.random(size, dtype=np.float32)
     s = np.float32(3.0)
     client.triad(b[:16], c[:16], s, device_index=device_index)  # untimed: connect + warm
-    rates, verified = [], True
-    for _ in range(repeats):
+    rates, history, verified = [], [], True
+    for idx in range(repeats):
         res = client.triad(b, c, s, device_index=device_index)
         moved = b.nbytes + c.nbytes + s.nbytes + res.result.nbytes
-        rates.append(moved / (res.round_trip_ms / 1000.0) / 1e6)
+        mb_s = moved / (res.round_trip_ms / 1000.0) / 1e6
+        rates.append(mb_s)
         err = relative_error(res.result, REFERENCE["triad"](b, c, s))
         verified = verified and err <= tolerance("triad", np.float32)
+        history.append(
+            {
+                "trial": idx + 1,
+                "throughput_mb_s": mb_s,
+                "round_trip_ms": res.round_trip_ms,
+                "gpu_time_ms": res.gpu_time_ms,
+                "network_time_ms": max(0.0, res.round_trip_ms - res.gpu_time_ms),
+                "bytes_moved": moved,
+            }
+        )
+    if return_history:
+        return statistics.median(rates), max(rates), verified, history
     return statistics.median(rates), max(rates), verified
 
 
